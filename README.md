@@ -12,7 +12,7 @@ A DeepSeek Harness plugin that shows a fully configurable splash screen **before
 
 ```powershell
 # 在 DSH 会话里安装本地插件
-plugin_manager install_bundle C:\Users\recko\DSH\plugins\rsa
+plugin_manager install_bundle <本仓库路径>
 ```
 
 安装后在 DSH 设置里打开 **RSA 启动画面**。
