@@ -2,6 +2,14 @@
 
 A DeepSeek Harness plugin that shows a fully configurable splash screen **before** the main window appears — a real startup animation rendered by the Electron main process, not a wrapper launcher.
 
+## Preview
+
+| Light | Dark |
+| --- | --- |
+| ![light splash](docs/media/splash-light.gif) | ![dark splash](docs/media/splash-dark.gif) |
+
+> 28-frame loop rendered from the actual splash page; the credit line sits bottom-right.
+
 - 设置页：**设置 → RSA 启动画面**
 - 中英双语、浅色/深色跟随 DSH 主题
 - 实时预览（改参数即时看到效果）
