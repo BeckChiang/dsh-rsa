@@ -1,0 +1,4 @@
+# runtime data (user config + deploy state), not versioned
+data/
+*.log
+node_modules/

@@ -1,0 +1,4 @@
+- insert:
+    - id: rsa
+      name: '@local/rsa'
+      config: {}
