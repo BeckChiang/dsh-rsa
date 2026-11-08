@@ -2,6 +2,12 @@
 
 A DeepSeek Harness plugin that shows a fully configurable splash screen **before** the main window appears — a real startup animation rendered by the Electron main process, not a wrapper launcher.
 
+> **点击图标，画面立刻出现，不再空屏等待。**
+> 启动画面在 DSH 主窗口出现之前就显示出来，主窗口在后台继续加载——专为启动较慢的机器设计，让你知道它已经在启动，而不是卡住了。
+>
+> **Instant splash — no blank screen.**
+> The splash appears the moment you click, while DSH keeps loading behind it. Built for slow startups, so you know it's launching instead of frozen.
+
 ## Preview
 
 | Light | Dark |
