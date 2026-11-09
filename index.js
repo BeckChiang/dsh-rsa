@@ -6,7 +6,7 @@ import { DEFAULTS, normalizeConfig } from "./lib/defaults.mjs";
 import { buildHtml } from "./lib/render.mjs";
 import { deploy, inspect, loadLogos, resolvePaths, applyPending } from "./lib/deploy.mjs";
 
-export const name = "@local/rsa";
+export const name = "dsh-rsa";
 export const inject = ["webServer"];
 
 const ROUTE = "/rsa";

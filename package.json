@@ -1,9 +1,28 @@
 {
-  "name": "@local/rsa",
+  "name": "dsh-rsa",
   "version": "0.2.0",
-  "private": true,
+  "description": "Real startup animation (RSA): configurable splash screen for DeepSeek Harness — real main-process splash with live preview, light/dark themes, and deep deploy into app.asar.",
   "type": "module",
-  "description": "Real startup animation (RSA): configurable splash screen for DeepSeek Harness.",
+  "license": "MIT",
+  "author": "BeckChiang",
+  "homepage": "https://github.com/BeckChiang/dsh-rsa#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/BeckChiang/dsh-rsa.git"
+  },
+  "bugs": {
+    "url": "https://github.com/BeckChiang/dsh-rsa/issues"
+  },
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "splash",
+    "splash-screen",
+    "startup",
+    "animation",
+    "electron"
+  ],
   "exports": {
     ".": "./index.js",
     "./client": "./client.js",
@@ -16,7 +35,8 @@
     "cordis.patch.yml",
     "lib/**/*",
     "locale/*.json",
-    "icon.svg"
+    "icon.svg",
+    "docs/media/*.gif"
   ],
   "dsh": {
     "bundle": { "patch": "./cordis.patch.yml" },

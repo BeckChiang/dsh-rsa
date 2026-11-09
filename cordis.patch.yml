@@ -1,4 +1,6 @@
+# dsh-rsa bundle patch: inserts this plugin into a profile's layer stack.
+# `name` must match the installed package name (dsh-rsa on npm).
 - insert:
     - id: rsa
-      name: '@local/rsa'
+      name: 'dsh-rsa'
       config: {}

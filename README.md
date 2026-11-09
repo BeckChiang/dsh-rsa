@@ -25,11 +25,16 @@ A DeepSeek Harness plugin that shows a fully configurable splash screen **before
 ## 安装
 
 ```powershell
-# 在 DSH 会话里安装本地插件
-plugin_manager install_bundle <本仓库路径>
+# 收录后可直接按包名安装（也可在插件市场面板搜索 dsh-rsa）
+plugin_manager install_bundle dsh-rsa
+
+# 或者直接从源码仓库安装
+plugin_manager install_bundle https://github.com/BeckChiang/dsh-rsa
 ```
 
 安装后在 DSH 设置里打开 **RSA 启动画面**。
+
+> 配置与部署状态写在插件目录下的 `data/`（`config.json` / `state.json`）。从 npm 安装时位于 profile 的 `node_modules/dsh-rsa/data/`；卸载重装会回到默认配置。
 
 ## 部署机制
 

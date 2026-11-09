@@ -1,5 +1,5 @@
 window.__ModuleLoader__.load({
-  id: '@local/rsa',
+  id: 'dsh-rsa',
   factory(require) {
     const React = require('react');
     const h = React.createElement;
