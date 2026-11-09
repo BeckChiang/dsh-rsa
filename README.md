@@ -33,7 +33,10 @@ plugin_manager install_bundle <本仓库路径>
 
 ## 部署机制
 
-1. 点「深度部署」→ 插件读取当前配置 → 生成 `lib/splash.cjs` → 重打包出 `resources/app.asar.rsa-new`。
+1. 点「深度部署」→ 插件读取当前配置 → 生成 `lib/splash.cjs` → 若安装包入口（`package.json` 的 `main`，通常是 `lib/main.js`）还没有 splash 插桩，就**自动在首行注入一行 `import("./splash.cjs")`** → 重打包出 `resources/app.asar.rsa-new`。
+   - 不存在「先跑 hook 安装器」这一步：首次部署即自动插桩，DSH 升级把 `app.asar` 换回官方版本后，再点一次部署就会重新注入。
+   - 插桩只有一行，与宿主 `main.js` 的形态（ESM / CJS）无关；等待 `app` ready、显示与关闭窗口的逻辑都在生成的 `lib/splash.cjs` 里。
+   - 插桩状态在设置页状态栏可见：`已存在` / `首次部署时自动注入` / `缺失`（有插桩但模块被换掉）。
 2. **重启 DSH 一次**：进程退出后，插件在下次启动 2.5 秒时把 pending 复制成 `app.asar`（`applyPending()`），并删除 pending。
 3. **再启动一次**：这次启动才加载新 asar，显示新画面。
 
@@ -43,7 +46,7 @@ plugin_manager install_bundle <本仓库路径>
 
 回滚：退出 DSH，把 `app.asar.rsa-backup` 复制回 `app.asar`。
 
-> DSH 升级会覆盖 `app.asar`，届时需要重新部署一次。
+> DSH 升级会覆盖 `app.asar`，届时重新部署一次即可（插桩会自动补回）。
 
 ## 配置项
 
@@ -70,6 +73,7 @@ plugins/rsa/
 │  ├─ defaults.mjs     # 默认配置 + normalizeConfig 校验
 │  ├─ render.mjs       # 参数化 splash HTML + CJS 生成
 │  ├─ asar.mjs         # asar 读写/重打包（original-fs）
+│  ├─ hook.mjs         # 入口一行插桩的检测与注入
 │  ├─ deploy.mjs       # 部署、pending 应用、备份
 │  ├─ store.mjs        # 配置与状态持久化（data/）
 │  └─ brand-*.svg      # 官方矢量 logo（浅色/深色）

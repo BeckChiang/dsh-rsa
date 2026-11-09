@@ -158,11 +158,12 @@ window.__ModuleLoader__.load({
         noticeTitle: '风险与差异',
         notice1: '本插件通过把 splash 模块写入已安装的 app.asar 实现深度部署；不签名、不触碰账号数据，首次部署前会保留一份备份（app.asar.rsa-backup）。',
         notice2: '深度部署不会自动重启 DSH：生成部署文件后，请手动重启 DeepSeek Harness，插件会在下次启动时应用并显示新的启动画面。',
-        notice3: 'DSH 升级会覆盖 app.asar，升级后启动画面会消失，需要重新部署。',
+        notice3: 'DSH 升级会覆盖 app.asar，升级后启动画面会消失；重新点一次部署即可恢复（插桩会自动重新注入，不需要额外安装器）。',
         notice4: '按你的要求，只做深度部署，没有实现「仅设置」的轻量模式。',
         statusHook: 'Splash 插桩',
         statusHookOk: '已存在',
         statusHookMissing: '缺失',
+        statusHookAuto: '首次部署时自动注入',
         statusAsar: 'asar 大小',
         statusBackup: '备份',
         statusBackupYes: '已存在',
@@ -251,11 +252,12 @@ window.__ModuleLoader__.load({
         noticeTitle: 'Risk & differences',
         notice1: 'Deep deployment writes the splash module into the installed app.asar; it does not sign anything or touch your account data, and keeps a one-time backup (app.asar.rsa-backup) before the first deploy.',
         notice2: 'Deep deployment does not restart DSH automatically. After the deployment files are prepared, restart DeepSeek Harness manually; the plugin applies them on the next start.',
-        notice3: 'A DSH update replaces app.asar, so the splash disappears after an upgrade — deploy again.',
+        notice3: 'A DSH update replaces app.asar, so the splash disappears after an upgrade — deploy again. The hook is re-injected automatically, no separate installer is needed.',
         notice4: 'As requested, only deep deployment is implemented; there is no settings-only lightweight mode.',
         statusHook: 'Splash hook',
         statusHookOk: 'installed',
         statusHookMissing: 'missing',
+        statusHookAuto: 'auto on first deploy',
         statusAsar: 'asar size',
         statusBackup: 'backup',
         statusBackupYes: 'present',
@@ -623,7 +625,7 @@ window.__ModuleLoader__.load({
             ? h(
                 'div',
                 { style: S.status },
-                t.statusHook + ': ' + (info.installed ? t.statusHookOk : t.statusHookMissing) +
+                t.statusHook + ': ' + (info.installed ? t.statusHookOk : info.hooked ? t.statusHookMissing : t.statusHookAuto) +
                   ' · ' + t.statusAsar + ': ' + (info.asarSize ? Math.round(info.asarSize / 1024 / 1024) + ' MB' : '?') +
                   ' · ' + t.statusBackup + ': ' + (info.backupExists ? t.statusBackupYes : t.statusBackupNo) +
                   (info.pending ? ' · ' + t.statusPending : '') +
