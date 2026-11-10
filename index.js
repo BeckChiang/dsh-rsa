@@ -67,9 +67,34 @@ function previewHtml(themeParam) {
   return buildHtml(config, logos, theme);
 }
 
+/**
+ * Reject cross-site writes. Browsers always attach Sec-Fetch-Site to fetch()
+ * and form posts, so a page the user visits cannot rewrite the config or arm a
+ * deploy; non-browser clients (curl) send no such header and keep working.
+ */
+function isCrossSiteWrite(req) {
+  if (req.method === "GET" || req.method === "HEAD") return false;
+  const site = req.headers["sec-fetch-site"];
+  if (site && site !== "same-origin" && site !== "none") return true;
+  const origin = req.headers.origin;
+  if (origin) {
+    try {
+      return new URL(origin).host !== req.headers.host;
+    } catch {
+      return true;
+    }
+  }
+  return false;
+}
+
 async function handle(ctx, req, res) {
   const url = parseUrl(req);
   const pathname = url.pathname;
+
+  if (isCrossSiteWrite(req)) {
+    sendJson(res, 403, { ok: false, error: "cross-site request rejected" });
+    return;
+  }
 
   if (pathname === `${ROUTE}/state` && req.method === "GET") {
     sendJson(res, 200, {

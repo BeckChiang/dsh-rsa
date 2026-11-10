@@ -159,7 +159,6 @@ window.__ModuleLoader__.load({
         notice1: '本插件通过把 splash 模块写入已安装的 app.asar 实现深度部署；不签名、不触碰账号数据，首次部署前会保留一份备份（app.asar.rsa-backup）。',
         notice2: '深度部署不会自动重启 DSH：生成部署文件后，请手动重启 DeepSeek Harness，插件会在下次启动时应用并显示新的启动画面。',
         notice3: 'DSH 升级会覆盖 app.asar，升级后启动画面会消失；重新点一次部署即可恢复（插桩会自动重新注入，不需要额外安装器）。',
-        notice4: '按你的要求，只做深度部署，没有实现「仅设置」的轻量模式。',
         statusHook: 'Splash 插桩',
         statusHookOk: '已存在',
         statusHookMissing: '缺失',
@@ -170,6 +169,7 @@ window.__ModuleLoader__.load({
         statusBackupNo: '还没有',
         statusLastDeploy: '上次部署',
         statusPending: '待应用（重启后生效）',
+        statusStale: '已过期，需重新部署',
         deployHint: '部署文件生成后不会自动重启，DSH 升级后需重新部署。',
       },
       en: {
@@ -253,7 +253,6 @@ window.__ModuleLoader__.load({
         notice1: 'Deep deployment writes the splash module into the installed app.asar; it does not sign anything or touch your account data, and keeps a one-time backup (app.asar.rsa-backup) before the first deploy.',
         notice2: 'Deep deployment does not restart DSH automatically. After the deployment files are prepared, restart DeepSeek Harness manually; the plugin applies them on the next start.',
         notice3: 'A DSH update replaces app.asar, so the splash disappears after an upgrade — deploy again. The hook is re-injected automatically, no separate installer is needed.',
-        notice4: 'As requested, only deep deployment is implemented; there is no settings-only lightweight mode.',
         statusHook: 'Splash hook',
         statusHookOk: 'installed',
         statusHookMissing: 'missing',
@@ -264,6 +263,7 @@ window.__ModuleLoader__.load({
         statusBackupNo: 'none yet',
         statusLastDeploy: 'last deploy',
         statusPending: 'pending (applies after restart)',
+        statusStale: 'stale — redeploy',
         deployHint: 'Deployment does not restart DSH automatically; a DSH update resets app.asar, so deploy again after upgrading.',
       },
     };
@@ -524,7 +524,7 @@ window.__ModuleLoader__.load({
         const res = await api('/deploy', { method: 'POST', body: JSON.stringify(config) });
         setBusy(false);
         if (res.ok) {
-          setMessage(t.deployed + (res.paths && res.paths.pending ? '\n' + res.paths.pending : ''));
+          setMessage(t.deployed + (res.pending ? '\n' + res.paths.pending : ''));
           if (res.state) setInfo((prev) => ({ ...(prev || {}), lastDeployAt: res.state.lastDeployAt }));
         } else {
           setMessage('');
@@ -609,7 +609,6 @@ window.__ModuleLoader__.load({
             h('div', null, t.notice1),
             h('div', null, t.notice2),
             h('div', null, t.notice3),
-            h('div', null, t.notice4),
           ),
           h(
             'div',
@@ -625,10 +624,10 @@ window.__ModuleLoader__.load({
             ? h(
                 'div',
                 { style: S.status },
-                t.statusHook + ': ' + (info.installed ? t.statusHookOk : info.hooked ? t.statusHookMissing : t.statusHookAuto) +
+                t.statusHook + ': ' + (info.installed ? (info.stale ? t.statusStale : t.statusHookOk) : info.hooked ? t.statusHookMissing : t.statusHookAuto) +
                   ' · ' + t.statusAsar + ': ' + (info.asarSize ? Math.round(info.asarSize / 1024 / 1024) + ' MB' : '?') +
                   ' · ' + t.statusBackup + ': ' + (info.backupExists ? t.statusBackupYes : t.statusBackupNo) +
-                  (info.pending ? ' · ' + t.statusPending : '') +
+                  (info.pendingExists ? ' · ' + t.statusPending : '') +
                   (info.lastDeployAt ? ' · ' + t.statusLastDeploy + ' ' + info.lastDeployAt : ''),
               )
             : null,

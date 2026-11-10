@@ -7,8 +7,9 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import test from "node:test";
-import { applyPending, deploy } from "../lib/deploy.mjs";
+import { applyPending, deploy, inspect } from "../lib/deploy.mjs";
 import { DEFAULTS, normalizeConfig } from "../lib/defaults.mjs";
+import { writeConfig } from "../lib/store.mjs";
 import { buildAsar, hostFiles, makeFixture, readEntry } from "./helpers.mjs";
 
 const config = normalizeConfig(DEFAULTS);
@@ -51,7 +52,8 @@ test("deploy stages a pending asar with hook + splash module on a clean host", {
     const result = await deploy(config, overrides(fixture));
     assert.equal(result.ok, true, result.error ?? "");
     assert.equal(result.hookInjected, true);
-    assert.equal(result.pending, true);
+    assert.equal(result.staged, true);
+    assert.equal(result.pending, fixture.pending);
     assert.ok(fs.existsSync(fixture.pending), "pending asar");
     assert.ok(fs.existsSync(fixture.backup), "backup asar");
 
@@ -124,6 +126,25 @@ test("applyPending discards a damaged pending asar", { skip: !isWindows }, () =>
     assert.ok(result.error);
     assert.equal(fs.existsSync(fixture.pending), false, "damaged pending asar must be removed");
     assert.deepEqual(fs.readFileSync(fixture.asar), before, "live app.asar must not change");
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test("inspect flags a deployed splash as stale once the config changes", { skip: !isWindows }, async () => {
+  const fixture = makeFixture();
+  try {
+    assert.equal((await deploy(config, overrides(fixture))).ok, true);
+    assert.equal(applyPending(overrides(fixture)).applied, true);
+
+    const fresh = inspect(overrides(fixture));
+    assert.equal(fresh.installed, true);
+    assert.equal(fresh.stale, false);
+
+    writeConfig({ ...config, tagline: { ...config.tagline, text: "changed tagline" } }, fixture.dataDir);
+    const stale = inspect(overrides(fixture));
+    assert.equal(stale.installed, true);
+    assert.equal(stale.stale, true, "a config change must mark the splash stale");
   } finally {
     fixture.cleanup();
   }

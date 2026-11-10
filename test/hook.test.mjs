@@ -31,6 +31,15 @@ test("injectHook keeps a shebang as the first line", () => {
   assert.ok(source.includes('import("./splash.cjs")'));
 });
 
+test("hasHook recognizes injected lines with a nested main-entry specifier", () => {
+  // The specifier depends on the folder of the host entry; the hook tag does
+  // not, so a nested entry ("lib/main.js" -> "./lib/splash.cjs") must count as
+  // hooked or deploy would throw "repacked ... has no splash hook".
+  assert.ok(hasHook(hookLine("./lib/splash.cjs")));
+  assert.ok(hasHook(hookLine("./splash.cjs")));
+  assert.equal(hasHook("main();"), false);
+});
+
 test("hookLine uses the given specifier", () => {
   const line = hookLine("./deep/splash.cjs");
   assert.ok(line.includes('import("./deep/splash.cjs")'));

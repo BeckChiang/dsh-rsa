@@ -45,10 +45,10 @@ plugin_manager install_bundle https://github.com/BeckChiang/dsh-rsa
 1. 点「深度部署」→ 插件读取当前配置 → 生成 `lib/splash.cjs` → 若安装包入口（`package.json` 的 `main`，通常是 `lib/main.js`）还没有 splash 插桩，就**自动在首行注入一行 `import("./splash.cjs")`** → 重打包出 `resources/app.asar.rsa-new`。
    - 不存在「先跑 hook 安装器」这一步：首次部署即自动插桩，DSH 升级把 `app.asar` 换回官方版本后，再点一次部署就会重新注入。
    - 插桩只有一行，与宿主 `main.js` 的形态（ESM / CJS）无关；等待 `app` ready、显示与关闭窗口的逻辑都在生成的 `lib/splash.cjs` 里。
-   - 插桩状态在设置页状态栏可见：`已存在` / `首次部署时自动注入` / `缺失`（有插桩但模块被换掉）。
+   - 插桩状态在设置页状态栏可见：`已存在` / `首次部署时自动注入` / `缺失`（有插桩但模块被换掉）；已部署的 splash 与当前配置的生成结果不一致时显示 `已过期，需重新部署`。
    - 重打包会**追加归档里还没有的文件**：干净的官方 `app.asar` 没有 `lib/splash.cjs`，部署时连缺失的中间目录一起补进去，再按新布局修正头部偏移；因此全新安装也能一次部署成功。
    - 任一步失败都会立刻删除 `resources/app.asar.rsa-new`，不会把半成品留到下次启动。
-2. **重启 DSH 一次**：进程退出后，插件在下次启动 2.5 秒时先校验 pending（入口确实带插桩、`lib/splash.cjs` 存在、宿主版本没在部署后升级过），通过才复制成 `app.asar`（`applyPending()`）并删除 pending；损坏或跨版本的 pending 直接丢弃，绝不用坏文件覆盖正在用的 `app.asar`。
+2. **重启 DSH 一次**：进程退出后，插件在下次启动 2.5 秒时先校验 pending（入口确实带插桩、`lib/splash.cjs` 存在、宿主版本没在部署后升级过），通过才换入成 `app.asar`（`applyPending()`）并删除 pending；损坏或跨版本的 pending 直接丢弃，绝不用坏文件覆盖正在用的 `app.asar`。换入是原子的：先写 `app.asar.rsa-tmp` 再 rename 覆盖，rename 因占用失败时退回复制并保留 pending，中途崩溃不会把旧 `app.asar` 截断。
 3. **再启动一次**：这次启动才加载新 asar，显示新画面。
 
 之所以要两次：Windows 下 `app.asar` 被运行中的 Electron 占用（文件锁），无法热替换。
