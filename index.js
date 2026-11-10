@@ -161,18 +161,28 @@ async function handle(ctx, req, res) {
 }
 
 export function apply(ctx) {
-  // Apply a previously prepared deployment on startup. Never restarts the app;
-  // if the asar is locked we keep the pending file and retry next launch.
-  const timer = setTimeout(() => {
+  const runApply = (why) => {
     try {
       const r = applyPending();
-      if (r.applied) console.log("[rsa] applied pending splash deployment");
-      else if (r.error) console.log("[rsa] pending apply failed:", r.error);
+      if (r.applied) console.log(`[rsa] applied pending splash deployment (${why})`);
+      else if (r.error) console.log(`[rsa] pending apply failed (${why}):`, r.error);
     } catch (error) {
-      console.log("[rsa] pending apply error:", error && error.message ? error.message : String(error));
+      console.log(`[rsa] pending apply error (${why}):`, error && error.message ? error.message : String(error));
     }
-  }, 2500);
+  };
+
+  // Startup fallback: a pending file left by an interrupted session is applied
+  // a couple of seconds after boot. This is why a deployment used to need two
+  // restarts — the swap happened after the splash had already been loaded.
+  const timer = setTimeout(() => runApply("startup"), 2500);
   timer.unref?.();
+
+  // Quit-time flush: swap a freshly staged asar in before this process exits,
+  // so the *next* launch already renders the new splash (one restart, not two).
+  // Deliberately not tied to ctx disposal — plugins are torn down before the
+  // process exit event, which would drop the listener exactly when it matters.
+  const onExit = () => runApply("exit");
+  process.once("exit", onExit);
   ctx.effect(
     () =>
       ctx.webServer.register({

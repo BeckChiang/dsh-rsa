@@ -1,6 +1,6 @@
 {
   "name": "dsh-rsa",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "Configurable startup splash screen for DeepSeek Harness desktop on Windows only — real main-process animation with live preview, light/dark themes, and a one-click deep deploy into app.asar.",
   "type": "module",
   "license": "MIT",
@@ -42,11 +42,15 @@
     "test": "node --test"
   },
   "dsh": {
-    "bundle": { "patch": "./cordis.patch.yml" },
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
     "client": {
       "platform": "web",
       "immediately": true,
-      "inject": ["@deepseek-ai/dsh-client-ui-conversation"]
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-conversation"
+      ]
     }
   }
 }
