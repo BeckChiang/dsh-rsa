@@ -93,7 +93,7 @@ window.__ModuleLoader__.load({
         saved: '已保存。',
         restored: '已恢复默认设置。',
         deploying: '正在准备部署…',
-        deployed: '部署文件已生成。请重启 DeepSeek Harness 使启动画面生效（不会自动重启）。',
+        deployed: '部署文件已生成。退出 DSH 时自动替换 app.asar，下次启动即显示新画面（不会自动重启）。',
         saveFirst: '请先保存，再部署。',
         logo: 'Logo',
         logoWidth: 'Logo 缩放（倍率）',
@@ -157,7 +157,7 @@ window.__ModuleLoader__.load({
         ringTailHint: '在光带后面加逐段淡出的尾巴。',
         noticeTitle: '风险与差异',
         notice1: '本插件通过把 splash 模块写入已安装的 app.asar 实现深度部署；不签名、不触碰账号数据，首次部署前会保留一份备份（app.asar.rsa-backup）。',
-        notice2: '深度部署不会自动重启 DSH：生成部署文件后，请手动重启 DeepSeek Harness，插件会在下次启动时应用并显示新的启动画面。',
+        notice2: '深度部署不会自动重启 DSH：生成部署文件后，退出 DeepSeek Harness 时插件会自动替换 app.asar，下次启动即显示新的启动画面；若被强杀或文件被占用，会在再下一次启动时补上。',
         notice3: 'DSH 升级会覆盖 app.asar，升级后启动画面会消失；重新点一次部署即可恢复（插桩会自动重新注入，不需要额外安装器）。',
         statusHook: 'Splash 插桩',
         statusHookOk: '已存在',
@@ -168,9 +168,9 @@ window.__ModuleLoader__.load({
         statusBackupYes: '已存在',
         statusBackupNo: '还没有',
         statusLastDeploy: '上次部署',
-        statusPending: '待应用（重启后生效）',
+        statusPending: '待替换（退出 DSH 时生效）',
         statusStale: '已过期，需重新部署',
-        deployHint: '部署文件生成后不会自动重启，DSH 升级后需重新部署。',
+        deployHint: '部署文件生成后不会自动重启：退出 DSH 时替换，下次启动生效。DSH 升级后需重新部署。',
       },
       en: {
         lang: 'English',
@@ -187,7 +187,7 @@ window.__ModuleLoader__.load({
         saved: 'Saved.',
         restored: 'Defaults restored.',
         deploying: 'Preparing deployment…',
-        deployed: 'Deployment files prepared. Restart DeepSeek Harness to apply the splash (no automatic restart).',
+        deployed: 'Deployment files prepared. They are swapped in when DSH exits, so the splash shows on the next launch (no automatic restart).',
         saveFirst: 'Save first, then deploy.',
         logo: 'Logo',
         logoWidth: 'Logo scale (×)',
@@ -251,7 +251,7 @@ window.__ModuleLoader__.load({
         ringTailHint: 'Adds a fading tail behind the band.',
         noticeTitle: 'Risk & differences',
         notice1: 'Deep deployment writes the splash module into the installed app.asar; it does not sign anything or touch your account data, and keeps a one-time backup (app.asar.rsa-backup) before the first deploy.',
-        notice2: 'Deep deployment does not restart DSH automatically. After the deployment files are prepared, restart DeepSeek Harness manually; the plugin applies them on the next start.',
+        notice2: 'Deep deployment does not restart DSH automatically. After the deployment files are prepared, the plugin swaps app.asar in when DSH exits, so the new splash shows on the next launch; if DSH is force-killed or the file is locked, the swap is retried on the following start.',
         notice3: 'A DSH update replaces app.asar, so the splash disappears after an upgrade — deploy again. The hook is re-injected automatically, no separate installer is needed.',
         statusHook: 'Splash hook',
         statusHookOk: 'installed',
@@ -262,9 +262,9 @@ window.__ModuleLoader__.load({
         statusBackupYes: 'present',
         statusBackupNo: 'none yet',
         statusLastDeploy: 'last deploy',
-        statusPending: 'pending (applies after restart)',
+        statusPending: 'pending (applied when DSH exits)',
         statusStale: 'stale — redeploy',
-        deployHint: 'Deployment does not restart DSH automatically; a DSH update resets app.asar, so deploy again after upgrading.',
+        deployHint: 'Deployment does not restart DSH automatically: it is swapped in on exit and shows on the next launch; a DSH update resets app.asar, so deploy again after upgrading.',
       },
     };
 
@@ -524,7 +524,7 @@ window.__ModuleLoader__.load({
         const res = await api('/deploy', { method: 'POST', body: JSON.stringify(config) });
         setBusy(false);
         if (res.ok) {
-          setMessage(t.deployed + (res.pending ? '\n' + res.paths.pending : ''));
+          setMessage(t.deployed + (res.pending ? '\n' + res.pending : ''));
           if (res.state) setInfo((prev) => ({ ...(prev || {}), lastDeployAt: res.state.lastDeployAt }));
         } else {
           setMessage('');
