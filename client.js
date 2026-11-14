@@ -85,6 +85,9 @@ window.__ModuleLoader__.load({
         subtitle: 'DSH 冷启动时显示在窗口出现之前的启动画面。',
         previewLight: '预览：浅色',
         previewDark: '预览：深色',
+        previewBoth: '预览：并排',
+        tagLight: '浅色',
+        tagDark: '深色',
         restore: '恢复默认',
         save: '保存',
         deploy: '深度部署',
@@ -171,6 +174,43 @@ window.__ModuleLoader__.load({
         statusPending: '待替换（退出 DSH 时生效）',
         statusStale: '已过期，需重新部署',
         deployHint: '部署文件生成后不会自动重启：退出 DSH 时替换，下次启动生效。DSH 升级后需重新部署。',
+        bannerFirst: '首次使用：请先运行一次兼容性检查，确认当前 DSH 版本可以安全部署。',
+        bannerUpdated: '检测到 DSH 已更新（上次检查针对 {from}，当前 {to}）：请重新运行兼容性检查，通过后再部署。',
+        bannerFailed: '上次兼容性检查未通过：修复前不要部署，否则下次可能无法启动。',
+        bannerNoHost: '找不到已安装的 app.asar：深度部署不可用。',
+        bannerRun: '立即检查',
+        bannerRunning: '检查中…',
+        bannerRetry: '重新检查',
+        confirmTitle: '确认深度部署？',
+        confirmBody: '即将改写 DSH 的 app.asar，退出 DSH 时替换、下次启动生效。若新版本无法启动，请运行下面的回滚脚本还原。',
+        confirmRollback: '回滚脚本（务必记下这个位置）',
+        confirmOk: '确认部署',
+        confirmCancel: '取消',
+        confirmChecked: '兼容性检查已通过 · 宿主 {host}',
+        compat: '兼容性与回滚',
+        compatHint: '部署前先跑一遍检查：确认 app.asar 头部自洽、整包完整性、原样重打包后字节一致。检查不通过时不要部署。',
+        compatRun: '运行兼容性检查',
+        compatRunning: '检查中…（要重打包一次，约数秒）',
+        compatOk: '兼容：可以安全部署',
+        compatWarn: '兼容（有提醒）：可以部署，但主机版本不在插件的测试清单内',
+        compatFail: '不兼容：请勿部署',
+        compatHost: '主机版本',
+        compatTested: '测试清单',
+        compatCheckedAt: '检查时间',
+        compatNever: '还没有运行过兼容性检查',
+        compatCheckFile: '找到 app.asar',
+        compatCheckHeader: '头部长度字段自洽',
+        compatCheckLayout: 'payload 偏移与原文件对齐',
+        compatCheckIntegrity: '全量 SHA256 校验',
+        compatCheckEntry: '主入口可解析',
+        compatCheckRoundtrip: '原样重打包字节一致',
+        compatCheckVersion: '主机版本在测试清单内',
+        rollbackTitle: '回滚脚本',
+        rollbackHint: '随插件一起安装。DSH 起不来时双击它即可把 app.asar 恢复成官方原版（会先确认 DSH 未在运行）。',
+        rollbackYes: '已安装',
+        rollbackNo: '尚未生成（插件首次加载后自动生成）',
+        statusLastApply: '上次换入',
+        statusLastApplyNone: '还没有换入记录',
       },
       en: {
         lang: 'English',
@@ -179,6 +219,9 @@ window.__ModuleLoader__.load({
         subtitle: 'The splash shown before the DSH window appears on a cold start.',
         previewLight: 'Preview: light',
         previewDark: 'Preview: dark',
+        previewBoth: 'Preview: side by side',
+        tagLight: 'light',
+        tagDark: 'dark',
         restore: 'Restore defaults',
         save: 'Save',
         deploy: 'Deploy (deep)',
@@ -265,6 +308,43 @@ window.__ModuleLoader__.load({
         statusPending: 'pending (applied when DSH exits)',
         statusStale: 'stale — redeploy',
         deployHint: 'Deployment does not restart DSH automatically: it is swapped in on exit and shows on the next launch; a DSH update resets app.asar, so deploy again after upgrading.',
+        bannerFirst: 'First run: run the compatibility check once to confirm this DSH build can be deployed safely.',
+        bannerUpdated: 'DSH was updated (last check was for {from}, now {to}): run the compatibility check again before deploying.',
+        bannerFailed: 'The last compatibility check did not pass: do not deploy until it does, or the next launch may fail.',
+        bannerNoHost: 'No installed app.asar was found, so deep deployment is unavailable.',
+        bannerRun: 'Check now',
+        bannerRunning: 'Checking…',
+        bannerRetry: 'Check again',
+        confirmTitle: 'Deploy into app.asar?',
+        confirmBody: 'This rewrites the DSH app.asar. It is swapped in when DSH exits and shows on the next launch. If the new build will not start, run the rollback script below.',
+        confirmRollback: 'Rollback script (note this path)',
+        confirmOk: 'Deploy now',
+        confirmCancel: 'Cancel',
+        confirmChecked: 'Compatibility check passed · host {host}',
+        compat: 'Compatibility and rollback',
+        compatHint: 'Runs before every deploy: it checks that the app.asar header is self-consistent, that the whole archive verifies, and that re-packing it unchanged yields identical bytes. Do not deploy when a check fails.',
+        compatRun: 'Run compatibility check',
+        compatRunning: 'Checking… (one re-pack, a few seconds)',
+        compatOk: 'Compatible: safe to deploy',
+        compatWarn: 'Compatible with a warning: deployable, but this host version is not on the tested list',
+        compatFail: 'Not compatible: do not deploy',
+        compatHost: 'Host version',
+        compatTested: 'Tested',
+        compatCheckedAt: 'Checked',
+        compatNever: 'The compatibility check has not been run yet',
+        compatCheckFile: 'app.asar found',
+        compatCheckHeader: 'Header length fields agree',
+        compatCheckLayout: 'Payload offset matches the original file',
+        compatCheckIntegrity: 'Full SHA256 verification',
+        compatCheckEntry: 'Main entry parses',
+        compatCheckRoundtrip: 'Unchanged re-pack is byte-identical',
+        compatCheckVersion: 'Host version is on the tested list',
+        rollbackTitle: 'Rollback script',
+        rollbackHint: 'Installed together with this plugin. If DSH stops starting, double-click it to restore the original app.asar (it first makes sure DSH is not running).',
+        rollbackYes: 'installed',
+        rollbackNo: 'not generated yet (created when the plugin first loads)',
+        statusLastApply: 'Last swap',
+        statusLastApplyNone: 'no swap recorded yet',
       },
     };
 
@@ -291,6 +371,9 @@ window.__ModuleLoader__.load({
         border: 'none',
         background: 'transparent',
       },
+      previewRow: { display: 'flex', alignItems: 'flex-start', justifyContent: 'center', gap: 10 },
+      previewCol: { flex: '1 1 0', minWidth: 0, maxWidth: 380 },
+      previewLabel: { fontSize: 11, lineHeight: 1.4, opacity: 0.6, textAlign: 'center', marginBottom: 4 },
       previewIframe: {
         position: 'absolute',
         left: 0,
@@ -319,7 +402,59 @@ window.__ModuleLoader__.load({
       primary: { padding: '7px 16px', borderRadius: 7, border: 0, background: '#2563eb', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600 },
       notice: { padding: '10px 12px', borderRadius: 8, background: 'rgba(234,179,8,.12)', border: '1px solid rgba(234,179,8,.35)', fontSize: 12, lineHeight: 1.6, margin: '16px 0 8px' },
       status: { fontSize: 12, opacity: 0.7, marginTop: 8, whiteSpace: 'pre-wrap' },
+      mono: { fontFamily: 'Consolas, ui-monospace, monospace', fontSize: 12, opacity: 0.85, userSelect: 'all', wordBreak: 'break-all', lineHeight: 1.5 },
+      check: { fontSize: 12, lineHeight: 1.6 },
+      checkFail: { fontSize: 12, lineHeight: 1.6, fontWeight: 600 },
       footer: { display: 'flex', alignItems: 'center', gap: 10, marginTop: 10, flexWrap: 'wrap' },
+      banner: {
+        flex: '0 0 auto',
+        margin: '0 16px 8px',
+        padding: '9px 12px',
+        borderRadius: 8,
+        border: '1px solid rgba(208,69,69,.55)',
+        background: 'rgba(208,69,69,.10)',
+        color: '#d04545',
+        fontSize: 12.5,
+        fontWeight: 600,
+        lineHeight: 1.55,
+        display: 'flex',
+        alignItems: 'center',
+        gap: 10,
+        flexWrap: 'wrap',
+      },
+      bannerText: { flex: '1 1 260px', minWidth: 0 },
+      bannerBtn: {
+        padding: '4px 12px',
+        borderRadius: 6,
+        border: '1px solid rgba(208,69,69,.65)',
+        background: 'transparent',
+        color: '#d04545',
+        cursor: 'pointer',
+        fontSize: 12,
+        fontWeight: 600,
+      },
+      confirm: {
+        margin: '12px 0 4px',
+        padding: '12px 14px',
+        borderRadius: 10,
+        border: '1px solid rgba(208,69,69,.5)',
+        background: 'rgba(208,69,69,.08)',
+      },
+      confirmTitle: { fontSize: 13, fontWeight: 600, marginBottom: 6, color: '#d04545' },
+      confirmBody: { fontSize: 12, lineHeight: 1.6, opacity: 0.85 },
+      confirmPath: {
+        margin: '8px 0 10px',
+        padding: '8px 10px',
+        borderRadius: 7,
+        border: '1px dashed rgba(208,69,69,.45)',
+        fontFamily: 'Consolas, ui-monospace, monospace',
+        fontSize: 12,
+        userSelect: 'all',
+        wordBreak: 'break-all',
+        lineHeight: 1.5,
+      },
+      confirmActions: { display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' },
+      danger: { padding: '6px 14px', borderRadius: 7, border: 0, background: '#d04545', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600 },
     };
 
     function Preview(props) {
@@ -459,16 +594,48 @@ window.__ModuleLoader__.load({
       return h('div', { style: S.section }, h('h3', { style: S.h3 }, props.title), props.children);
     }
 
+    const CHECK_LABEL = {
+      file: 'compatCheckFile',
+      header: 'compatCheckHeader',
+      layout: 'compatCheckLayout',
+      integrity: 'compatCheckIntegrity',
+      entry: 'compatCheckEntry',
+      roundtrip: 'compatCheckRoundtrip',
+      version: 'compatCheckVersion',
+      error: 'compatFail',
+    };
+
     function SettingsPage() {
       const [config, setConfig] = useState(null);
       const [info, setInfo] = useState(null);
+      const [paths, setPaths] = useState(null);
+      const [compat, setCompat] = useState(null);
+      const [notice, setNotice] = useState(null);
+      const [confirming, setConfirming] = useState(false);
+      const [checking, setChecking] = useState(false);
       const lang = useLang();
-      const [previewTheme, setPreviewTheme] = useState(null);
+      // 'both' shows light and dark side by side (half the height of one big
+      // frame, which is what the settings form needs); the other two zoom in on
+      // a single theme for inspecting detail.
+      const [previewMode, setPreviewMode] = useState('both');
       const isDark = useDarkMode();
       const [busy, setBusy] = useState(false);
       const [message, setMessage] = useState('');
       const [error, setError] = useState('');
       const t = TEXT[lang] || TEXT.zh;
+
+      const runCompat = useCallback(async () => {
+        setChecking(true);
+        setError('');
+        setMessage('');
+        const res = await api('/compat');
+        setChecking(false);
+        if (res.ok) {
+          setCompat(res.report);
+          if (res.compat) setNotice(res.compat);
+        } else setError(res.error || 'Compatibility check failed');
+        return res;
+      }, []);
 
       useEffect(() => {
         let alive = true;
@@ -477,12 +644,17 @@ window.__ModuleLoader__.load({
           if (data.ok) {
             setConfig(data.config);
             setInfo(data.inspect);
+            setPaths(data.paths || null);
+            setNotice(data.compat || null);
+            // First install or a host update: check once by itself so the banner
+            // can report a verdict instead of just asking the user to do it.
+            if (data.compat && data.compat.needed) runCompat();
           } else setError(data.error || 'Failed to load RSA state');
         });
         return () => {
           alive = false;
         };
-      }, []);
+      }, [runCompat]);
 
       const patch = useCallback((section, key, value) => {
         setConfig((prev) => {
@@ -513,15 +685,35 @@ window.__ModuleLoader__.load({
         if (res.ok) {
           setConfig(res.config);
           setMessage(t.restored);
-          setPreviewNonce((n) => n + 1);
         } else setError(res.error || 'Reset failed');
       }, [t]);
 
+      const checkLabel = useCallback((id) => t[CHECK_LABEL[id]] || id, [t]);
+
+      // Step 1: prove the archive is safe to rewrite, then ask for confirmation.
+      // Nothing touches app.asar until step 2.
+      const requestDeploy = useCallback(async () => {
+        setBusy(true);
+        setError('');
+        setMessage('');
+        const res = await runCompat();
+        setBusy(false);
+        if (!res || !res.ok || !res.report || !res.report.ok) {
+          if (res && res.report) setCompat(res.report);
+          setConfirming(false);
+          setError(res && res.report && res.report.ok === false ? t.compatFail : (res && res.error) || 'Compatibility check failed');
+          return;
+        }
+        setConfirming(true);
+      }, [runCompat, t]);
+
+      // Step 2: the user has seen the rollback path and pressed confirm.
       const deploy = useCallback(async () => {
         setBusy(true);
         setError('');
         setMessage(t.deploying);
-        const res = await api('/deploy', { method: 'POST', body: JSON.stringify(config) });
+        setConfirming(false);
+        const res = await api('/deploy', { method: 'POST', body: JSON.stringify({ config, confirmed: true }) });
         setBusy(false);
         if (res.ok) {
           setMessage(t.deployed + (res.pending ? '\n' + res.pending : ''));
@@ -530,7 +722,23 @@ window.__ModuleLoader__.load({
           setMessage('');
           setError(res.error || 'Deployment failed');
         }
+        if (res.report) setCompat(res.report);
+        if (res.compat) setNotice(res.compat);
       }, [config, t]);
+
+      // The red banner at the top of the page. It appears on first install and
+      // whenever the host build changed under us, because a check recorded
+      // against an older app.asar says nothing about the current one.
+      let bannerText = null;
+      if (notice && notice.needed) {
+        if (notice.reason === "host-updated") {
+          bannerText = t.bannerUpdated
+            .replace("{from}", (notice.last && notice.last.hostVersion) || "?")
+            .replace("{to}", notice.hostVersion || "?");
+        } else if (notice.reason === "last-failed") bannerText = t.bannerFailed;
+        else if (notice.reason === "no-host") bannerText = t.bannerNoHost;
+        else bannerText = t.bannerFirst;
+      }
 
       if (!config) return h('div', { style: { ...S.root, padding: 16 } }, h('div', { style: S.status }, error || t.loading));
 
@@ -542,12 +750,35 @@ window.__ModuleLoader__.load({
           { style: S.bar },
           h('h2', { style: S.title }, t.title),
           h('button', { style: S.btn, onClick: () => setLangGlobal(lang === 'zh' ? 'en' : 'zh') }, t.switchLang),
-          h('button', { style: S.btn, onClick: () => setPreviewTheme((v) => ((v || (isDark ? 'dark' : 'light')) === 'light' ? 'dark' : 'light')) }, (previewTheme || (isDark ? 'dark' : 'light')) === 'light' ? t.previewLight : t.previewDark),
+          h('button', { style: S.btn, onClick: () => setPreviewMode((v) => (v === 'both' ? 'light' : v === 'light' ? 'dark' : 'both')) }, previewMode === 'light' ? t.previewLight : previewMode === 'dark' ? t.previewDark : t.previewBoth),
           h('button', { style: S.btn, onClick: reset, disabled: busy }, t.restore),
           h('button', { style: S.primary, onClick: save, disabled: busy }, t.save),
         ),
+        bannerText
+          ? h(
+              'div',
+              { style: S.banner },
+              h('span', { style: S.bannerText }, bannerText),
+              h(
+                'button',
+                { style: S.bannerBtn, onClick: runCompat, disabled: checking || busy },
+                checking ? t.bannerRunning : (notice && notice.last && notice.last.at ? t.bannerRetry : t.bannerRun),
+              ),
+            )
+          : null,
         h('div', { style: S.subtitle }, t.subtitle),
-        h('div', { style: S.previewSticky }, h(Preview, { theme: previewTheme || (isDark ? 'dark' : 'light'), config: config })),
+        h(
+          'div',
+          { style: S.previewSticky },
+          previewMode === 'both'
+            ? h(
+                'div',
+                { style: S.previewRow },
+                h('div', { style: S.previewCol }, h('div', { style: S.previewLabel }, t.tagLight), h(Preview, { theme: 'light', config: config })),
+                h('div', { style: S.previewCol }, h('div', { style: S.previewLabel }, t.tagDark), h(Preview, { theme: 'dark', config: config })),
+              )
+            : h(Preview, { theme: previewMode, config: config }),
+        ),
         h(
           'div',
           { style: S.scroll },
@@ -603,6 +834,40 @@ window.__ModuleLoader__.load({
             h(Field, { label: t.ringTail, hint: t.ringTailHint }, h(Toggle, { value: config.ring.tail, onChange: (v) => patch('ring', 'tail', v) })),
           ),
           h(
+            Section,
+            { title: t.compat },
+            h('div', { style: { fontSize: 12, opacity: 0.62, lineHeight: 1.6, marginBottom: 8 } }, t.compatHint),
+            h(
+              'div',
+              { style: { display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' } },
+              h('button', { style: S.btn, onClick: runCompat, disabled: busy || checking }, checking ? t.compatRunning : t.compatRun),
+              compat
+                ? h('span', { style: { fontSize: 12, fontWeight: 600 } }, compat.ok ? (compat.checks.some((c) => c.warn) ? t.compatWarn : t.compatOk) : t.compatFail)
+                : h('span', { style: { fontSize: 12, opacity: 0.6 } }, t.compatNever),
+            ),
+            compat
+              ? h(
+                  'div',
+                  { style: { marginTop: 8 } },
+                  h('div', { style: S.status }, t.compatHost + ': ' + (compat.hostVersion || '?') + ' · ' + t.compatTested + ': ' + (compat.testedVersions || []).join(', ')),
+                  compat.checks.map((c, i) =>
+                    h(
+                      'div',
+                      { key: c.id || i, style: c.ok ? S.check : S.checkFail },
+                      (c.ok ? '✓ ' : c.warn ? '! ' : '✗ ') + checkLabel(c.id) + (c.detail ? ' — ' + c.detail : ''),
+                    ),
+                  ),
+                )
+              : null,
+            h(
+              'div',
+              { style: { marginTop: 12, paddingTop: 10, borderTop: '1px solid rgba(128,128,128,.18)' } },
+              h('div', { style: { fontSize: 12, opacity: 0.78 } }, t.rollbackTitle + ' · ' + (paths && paths.rollbackExists ? t.rollbackYes : t.rollbackNo)),
+              h('div', { style: S.mono }, (paths && paths.rollback) || '?'),
+              h('div', { style: { fontSize: 12, opacity: 0.62, lineHeight: 1.6, marginTop: 4 } }, t.rollbackHint),
+            ),
+          ),
+          h(
             'div',
             { style: S.notice },
             h('strong', null, t.noticeTitle),
@@ -610,10 +875,29 @@ window.__ModuleLoader__.load({
             h('div', null, t.notice2),
             h('div', null, t.notice3),
           ),
+          confirming
+            ? h(
+                'div',
+                { style: S.confirm },
+                h('div', { style: S.confirmTitle }, t.confirmTitle),
+                h('div', { style: S.confirmBody }, t.confirmBody),
+                h('div', { style: { fontSize: 12, fontWeight: 600, marginTop: 10 } }, t.confirmRollback),
+                h('div', { style: S.confirmPath }, (paths && paths.rollback) || '?'),
+                compat
+                  ? h('div', { style: { fontSize: 12, opacity: 0.72, marginBottom: 10 } }, t.confirmChecked.replace('{host}', compat.hostVersion || '?'))
+                  : null,
+                h(
+                  'div',
+                  { style: S.confirmActions },
+                  h('button', { style: S.danger, onClick: deploy, disabled: busy }, busy ? '…' : t.confirmOk),
+                  h('button', { style: S.btn, onClick: () => setConfirming(false), disabled: busy }, t.confirmCancel),
+                ),
+              )
+            : null,
           h(
             'div',
             { style: S.footer },
-            h('button', { style: S.primary, onClick: deploy, disabled: busy }, busy ? '…' : t.deploy),
+            h('button', { style: S.primary, onClick: requestDeploy, disabled: busy }, busy ? '…' : t.deploy),
             h('button', { style: S.btn, onClick: save, disabled: busy }, t.saveOnly),
             h('span', { style: { opacity: 0.6, fontSize: 12 } }, t.deployHint),
           ),
@@ -628,7 +912,8 @@ window.__ModuleLoader__.load({
                   ' · ' + t.statusAsar + ': ' + (info.asarSize ? Math.round(info.asarSize / 1024 / 1024) + ' MB' : '?') +
                   ' · ' + t.statusBackup + ': ' + (info.backupExists ? t.statusBackupYes : t.statusBackupNo) +
                   (info.pendingExists ? ' · ' + t.statusPending : '') +
-                  (info.lastDeployAt ? ' · ' + t.statusLastDeploy + ' ' + info.lastDeployAt : ''),
+                  (info.lastDeployAt ? ' · ' + t.statusLastDeploy + ' ' + info.lastDeployAt : '') +
+                  ' · ' + t.statusLastApply + ' ' + (info.lastApplyResult ? info.lastApplyResult + (info.lastAppliedAt ? ' ' + info.lastAppliedAt : '') : t.statusLastApplyNone),
               )
             : null,
         ),

@@ -36,14 +36,16 @@ export function buildAsar(files) {
     offset += buf.length;
   }
 
-  const json = JSON.stringify(tree);
-  const padded = json + " ".repeat((4 - (json.length % 4)) % 4);
-  const jsonBuf = Buffer.from(padded, "utf8");
+  // Mirror electron-builder's layout: the header JSON is padded to a 4-byte
+  // boundary, head[4] carries padded+8, head[12] keeps the RAW JSON length.
+  const raw = Buffer.from(JSON.stringify(tree), "utf8");
+  const padLen = (4 - (raw.length % 4)) % 4;
+  const jsonBuf = padLen ? Buffer.concat([raw, Buffer.alloc(padLen, 0x20)]) : raw;
   const head = Buffer.alloc(HEADER_SIZE);
   head.writeUInt32LE(4, 0);
   head.writeUInt32LE(jsonBuf.length + 8, 4);
   head.writeUInt32LE(jsonBuf.length + 4, 8);
-  head.writeUInt32LE(jsonBuf.length, 12);
+  head.writeUInt32LE(raw.length, 12);
 
   return Buffer.concat([head, jsonBuf, ...chunks]);
 }

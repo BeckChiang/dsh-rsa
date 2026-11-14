@@ -7,7 +7,7 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import test from "node:test";
-import { readAsar, readFileFromAsar, repackAsar, walkFiles } from "../lib/asar.mjs";
+import { readAsar, readFileFromAsar, repackAsar, verifyAsar, walkFiles } from "../lib/asar.mjs";
 import { buildAsar, hostFiles, listEntries, makeFixture, readEntry } from "./helpers.mjs";
 
 function withFixture(files, fn) {
@@ -96,7 +96,7 @@ test("repackAsar reads back every entry at the offset the header advertises", ()
         assert.equal(bytes.length, item.size, `${filePath} size`);
         cursor += item.size;
       }
-      assert.equal(16 + asar.jsonLen + cursor, asar.size);
+      assert.equal(asar.dataOffset + cursor, asar.size);
     } finally {
       fs.closeSync(asar.fd);
     }
@@ -118,6 +118,97 @@ test("repackAsar copies the payload unchanged when nothing is replaced", () =>
     }
     assert.deepEqual(listEntries(out).sort(), Object.keys(hostFiles()).sort());
   }));
+
+// Regression: electron-builder pads the header JSON to a 4-byte boundary, so
+// head[12] (raw JSON length) is NOT the distance to the payload. Reading
+// dataOffset as `16 + head[12]` shifted every file by up to 3 bytes, which made
+// the repacked app.asar unloadable (DSH died at startup with no useful error).
+function archiveWithPaddedHeader(files) {
+  for (let n = 0; n < 8; n += 1) {
+    const buf = buildAsar({ ...files, [`pad-${n}.txt`]: "x".repeat(n) });
+    const jsonLen = buf.readUInt32LE(12);
+    if (jsonLen % 4 !== 0) return buf;
+  }
+  throw new Error("fixture builder could not produce a padded header");
+}
+
+test("readAsar uses the padded header size, not the raw JSON length", () => {
+  const dir = fs.mkdtempSync(path.join(process.env.TEMP ?? "/tmp", "dsh-rsa-pad-"));
+  try {
+    const file = path.join(dir, "app.asar");
+    const files = { "package.json": JSON.stringify({ main: "lib/main.js" }), "lib/main.js": "alpha" };
+    fs.writeFileSync(file, archiveWithPaddedHeader(files));
+    const asar = readAsar(file);
+    try {
+      assert.notEqual(asar.jsonLen % 4, 0, "fixture must have a padded header");
+      assert.ok(asar.headerSize > asar.jsonLen, "padded header should be longer than the raw JSON");
+      assert.equal(asar.dataOffset, 16 + asar.headerSize);
+      const head = fs.readFileSync(file).subarray(0, 16);
+      assert.equal(asar.dataOffset - 16, head.readUInt32LE(4) - 8);
+      for (const [filePath, expected] of Object.entries(files)) {
+        assert.equal(readFileFromAsar(asar, filePath).toString("utf8"), expected, filePath);
+      }
+      const { checked, bad } = verifyAsar(asar);
+      assert.ok(checked >= 2);
+      assert.deepEqual(bad, []);
+    } finally {
+      fs.closeSync(asar.fd);
+    }
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("repackAsar keeps a padded-header archive byte-exact", () => {
+  const dir = fs.mkdtempSync(path.join(process.env.TEMP ?? "/tmp", "dsh-rsa-pad-repack-"));
+  try {
+    const files = hostFiles({ "assets/blob.bin": Buffer.from([1, 2, 3, 4, 5, 6, 7]) });
+    const source = path.join(dir, "app.asar");
+    fs.writeFileSync(source, archiveWithPaddedHeader(files));
+    const out = path.join(dir, "repacked.asar");
+    const asar = readAsar(source);
+    try {
+      repackAsar(asar, out, new Map([["lib/main.js", Buffer.from("hooked!\n")]]));
+    } finally {
+      fs.closeSync(asar.fd);
+    }
+    const packed = readAsar(out);
+    try {
+      assert.equal(readFileFromAsar(packed, "lib/main.js").toString("utf8"), "hooked!\n");
+      for (const [filePath, expected] of Object.entries(files)) {
+        if (filePath === "lib/main.js") continue;
+        const want = Buffer.isBuffer(expected) ? expected : Buffer.from(expected, "utf8");
+        assert.deepEqual(readFileFromAsar(packed, filePath), want, filePath);
+      }
+      assert.deepEqual(verifyAsar(packed).bad, []);
+    } finally {
+      fs.closeSync(packed.fd);
+    }
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("verifyAsar catches a payload shifted out from under the header", () => {
+  const dir = fs.mkdtempSync(path.join(process.env.TEMP ?? "/tmp", "dsh-rsa-corrupt-"));
+  try {
+    const file = path.join(dir, "app.asar");
+    const buf = Buffer.from(buildAsar({ "a.txt": "AAAA", "b.txt": "BBBB" }));
+    fs.writeFileSync(file, buf);
+    // Flip one payload byte: the header stays self-consistent, the bytes no longer match.
+    buf[buf.length - 1] ^= 0xff;
+    fs.writeFileSync(file, buf);
+    const asar = readAsar(file);
+    try {
+      const { bad } = verifyAsar(asar);
+      assert.deepEqual(bad, ["b.txt"]);
+    } finally {
+      fs.closeSync(asar.fd);
+    }
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
 
 test("buildAsar fixture is readable by readAsar", () => {
   const buf = buildAsar({ "package.json": JSON.stringify({ main: "lib/main.js" }), "lib/main.js": "x" });

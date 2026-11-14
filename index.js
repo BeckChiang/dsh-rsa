@@ -1,10 +1,56 @@
 // Real startup animation (RSA) — host side.
 // Serves the settings API under /rsa and performs deep deployment into app.asar.
 
-import { readConfig, writeConfig, resetConfig, readState } from "./lib/store.mjs";
+import { readConfig, writeConfig, resetConfig, readState, writeState } from "./lib/store.mjs";
 import { DEFAULTS, normalizeConfig } from "./lib/defaults.mjs";
 import { buildHtml } from "./lib/render.mjs";
 import { deploy, inspect, loadLogos, resolvePaths, applyPending } from "./lib/deploy.mjs";
+import { checkCompatibility, compatStatus } from "./lib/compat.mjs";
+import { ensureRollbackScript, rollbackPath, rollbackExists } from "./lib/rollback.mjs";
+
+// --- path overrides (tests only) --------------------------------------------
+
+// Production always resolves the live install from process.resourcesPath. Tests
+// point the same routes at a temp fixture through this setter — deliberately
+// not through the cordis context, whose proxy throws on undeclared props.
+let pathOverrides = {};
+
+export function setPathOverrides(overrides) {
+  pathOverrides = overrides || {};
+  return pathOverrides;
+}
+
+// --- compatibility bookkeeping ----------------------------------------------
+
+function compatibilityStatus(overrides = {}) {
+  try {
+    return compatStatus(resolvePaths(overrides).asar, readState(overrides.dataDir));
+  } catch (error) {
+    return { needed: true, reason: "no-host", hostVersion: null, hostError: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+function recordCompat(report, full, overrides = {}) {
+  try {
+    writeState({
+      lastCompatAt: new Date().toISOString(),
+      lastCompatHostVersion: report && report.hostVersion ? report.hostVersion : null,
+      lastCompatOk: Boolean(report && report.ok === true),
+      lastCompatFull: full === true,
+      lastCompatError: report && report.error ? String(report.error) : null,
+    }, overrides.dataDir);
+  } catch (error) {
+    console.log("[rsa] could not record the compatibility result:", error && error.message ? error.message : String(error));
+  }
+}
+
+// Runs the full check (round-trip included) and remembers it. Called before
+// every deployment and once automatically when the host build is new to us.
+function runFullCheck(overrides = {}) {
+  const report = checkCompatibility(overrides, { full: true });
+  recordCompat(report, true, overrides);
+  return report;
+}
 
 export const name = "dsh-rsa";
 export const inject = ["webServer"];
@@ -87,7 +133,12 @@ function isCrossSiteWrite(req) {
   return false;
 }
 
-async function handle(ctx, req, res) {
+export async function handle(ctx, req, res) {
+  // Never read `ctx.<anything>` here: the cordis context is a proxy that throws
+  // "cannot get property ... without inject" for undeclared props, and that
+  // message was surfacing straight into the settings page. Path overrides are a
+  // test-only hook kept in a module variable instead.
+  const overrides = pathOverrides;
   const url = parseUrl(req);
   const pathname = url.pathname;
 
@@ -101,9 +152,10 @@ async function handle(ctx, req, res) {
       ok: true,
       config: readConfig(),
       defaults: DEFAULTS,
-      inspect: inspect(),
-      state: readState(),
-      paths: resolvePaths(),
+      inspect: inspect(overrides),
+      state: readState(overrides.dataDir),
+      compat: compatibilityStatus(overrides),
+      paths: { ...resolvePaths(overrides), rollback: rollbackPath(overrides), rollbackExists: rollbackExists(overrides) },
     });
     return;
   }
@@ -144,13 +196,42 @@ async function handle(ctx, req, res) {
     return;
   }
 
+  if (pathname === `${ROUTE}/compat` && req.method === "GET") {
+    // Read-only probe of the installed archive. The round-trip repack is the
+    // slow part (it writes a 200 MB copy to the temp dir), so it can be turned
+    // off with ?full=0 when the caller only wants the cheap checks.
+    try {
+      const full = url.searchParams.get("full") !== "0";
+      const report = checkCompatibility(overrides, { full });
+      if (full) recordCompat(report, true, overrides);
+      sendJson(res, 200, { ok: true, report, compat: compatibilityStatus(overrides) });
+    } catch (error) {
+      sendJson(res, 500, { ok: false, error: error instanceof Error ? error.message : String(error) });
+    }
+    return;
+  }
+
   if (pathname === `${ROUTE}/deploy` && req.method === "POST") {
     try {
       const body = await readBody(req);
-      const config = body ? normalizeConfig(JSON.parse(body)) : readConfig();
-      writeConfig(config);
-      const result = await deploy(config);
-      sendJson(res, result.ok ? 200 : 500, result);
+      const raw = body ? JSON.parse(body) : {};
+      // Two-step confirmation on purpose: the settings page shows the rollback
+      // path before this flag is sent, so a deployment is never one stray click.
+      if (raw.confirmed !== true) {
+        sendJson(res, 400, { ok: false, error: "confirmation required", needConfirm: true, rollback: rollbackPath(overrides) });
+        return;
+      }
+      const config = normalizeConfig(raw.config ?? raw);
+      // Re-check immediately before touching the archive: the host may have been
+      // updated between opening this page and pressing the button.
+      const pre = runFullCheck(overrides);
+      if (!pre.ok) {
+        sendJson(res, 409, { ok: false, error: "compatibility check failed", report: pre, compat: compatibilityStatus(overrides) });
+        return;
+      }
+      writeConfig(config, overrides.dataDir);
+      const result = await deploy(config, overrides);
+      sendJson(res, result.ok ? 200 : 500, { ...result, report: pre, compat: compatibilityStatus(overrides) });
     } catch (error) {
       sendJson(res, 500, { ok: false, error: error instanceof Error ? error.message : String(error) });
     }
@@ -161,21 +242,50 @@ async function handle(ctx, req, res) {
 }
 
 export function apply(ctx) {
-  const runApply = (why) => {
+  // The rollback script ships inside the plugin directory, but a fresh install
+  // (or a deploy done from another session) may not have generated it yet, so
+  // it is refreshed on every load. Installing the plugin therefore installs the
+  // script too.
+  try {
+    ensureRollbackScript(resolvePaths());
+  } catch (error) {
+    console.log("[rsa] could not write the rollback script:", error && error.message ? error.message : String(error));
+  }
+
+  const runApply = (at) => {
     try {
-      const r = applyPending();
-      if (r.applied) console.log(`[rsa] applied pending splash deployment (${why})`);
-      else if (r.error) console.log(`[rsa] pending apply failed (${why}):`, r.error);
+      const r = applyPending({ at });
+      if (r.applied) console.log(`[rsa] applied pending splash deployment (${at}, ${r.mode})`);
+      else if (r.error) console.log(`[rsa] pending apply failed (${at}):`, r.error);
+      else if (r.validated) console.log(`[rsa] pending splash deployment is armed and valid; it is swapped in when DSH exits (${at})`);
     } catch (error) {
-      console.log(`[rsa] pending apply error (${why}):`, error && error.message ? error.message : String(error));
+      console.log(`[rsa] pending apply error (${at}):`, error && error.message ? error.message : String(error));
     }
   };
 
-  // Startup fallback: a pending file left by an interrupted session is applied
-  // a couple of seconds after boot. This is why a deployment used to need two
-  // restarts — the swap happened after the splash had already been loaded.
+  // Startup: validate a pending file left behind by an interrupted session and
+  // report it. Deliberately no swap here — this process is still reading from
+  // app.asar, so replacing it mid-session would corrupt later reads.
   const timer = setTimeout(() => runApply("startup"), 2500);
   timer.unref?.();
+
+  // First install, or a DSH update that swapped app.asar underneath us: run the
+  // full check once by itself and remember it, so the panel can tell the user
+  // whether the next deployment is safe without them having to ask.
+  const compatTimer = setTimeout(() => {
+    try {
+      const status = compatibilityStatus();
+      if (!status.needed) return;
+      const report = runFullCheck();
+      console.log(
+        `[rsa] automatic compatibility check (${status.reason}, host ${report.hostVersion || "?"}): ${report.ok ? "passed" : "FAILED"}` +
+          (report.ok ? "" : " — deep deployment is blocked until this is fixed"),
+      );
+    } catch (error) {
+      console.log("[rsa] automatic compatibility check failed:", error && error.message ? error.message : String(error));
+    }
+  }, 5000);
+  compatTimer.unref?.();
 
   // Quit-time flush: swap a freshly staged asar in before this process exits,
   // so the *next* launch already renders the new splash (one restart, not two).

@@ -2,3 +2,6 @@
 data/
 *.log
 node_modules/
+
+# generated per install: bakes the local resources path in, so it is not versioned
+bin/rsa-rollback.cmd
