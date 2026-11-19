@@ -444,6 +444,13 @@ mkdir -p tmp/mkt/npm
 curl -sL https://registry.npmjs.org/npm/-/npm-12.2.2.tgz | tar -xz --strip-components=1 -C tmp/mkt/npm
 ```
 
+DSH 沙箱里 `curl` 访问 registry 会报 `SSL connect error (exit 35)`，换 node 自带 TLS 抓同一份：
+
+```powershell
+node --input-type=module -e "import fs from 'node:fs'; const r = await fetch('https://registry.npmjs.org/npm/-/npm-12.2.2.tgz'); fs.writeFileSync('tmp/mkt/npm.tgz', Buffer.from(await r.arrayBuffer()))"
+tar -xzf tmp/mkt/npm.tgz --strip-components=1 -C tmp/mkt/npm
+```
+
 `tmp/mkt/npmrc` 只写一行 `registry=https://registry.npmjs.org/`；命令前设 `npm_config_userconfig` 与 `npm_config_cache` 指向 `tmp/mkt`，真 token 只放 tmp，绝不进仓库。
 
 ### 5. dry-run 核对
