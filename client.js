@@ -776,10 +776,14 @@ window.__ModuleLoader__.load({
         // it no longer applies, so do not restate it as if it were current.
         verdictText = t.compatNeedCheck;
       }
+      // The report carries `padding` on its own; the stored verdict keeps it under
+      // `last`. Prefer the report (freshest) and fall back to the recorded one.
+      const padByte =
+        (compat && compat.padding) || (notice && notice.last && notice.last.padding) || null;
       const hostLine = hostInfo
         ? t.compatHost + ': ' + (hostInfo.hostVersion || '?') +
           ' · ' + t.compatTested + ': ' + (hostInfo.testedVersions || []).join(', ') +
-          (hostInfo.last && hostInfo.last.padding ? ' · ' + t.compatPadding + ': 0x' + hostInfo.last.padding : '')
+          (padByte ? ' · ' + t.compatPadding + ': 0x' + padByte : '')
         : null;
       const lastLine = stored
         ? t.compatLastCheck + ': ' + sourceLabel(stored.source) + ' · ' + (stored.ok ? t.compatResultOk : t.compatResultFail) +
