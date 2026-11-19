@@ -4,8 +4,8 @@
 
 A configurable startup splash screen for the DeepSeek Harness desktop app. The splash is rendered by the **Electron main process before the main window appears** — a real startup animation, not a launcher wrapper, and not a web page that flashes after the window is already up.
 
-> 当前版本 **1.0.0**。仅 Windows 桌面版支持深度部署。
-> Current release **1.0.0**. Deep deployment is Windows-desktop only.
+> 当前版本 **1.0.3**。仅 Windows 桌面版支持深度部署。
+> Current release **1.0.3**. Deep deployment is Windows-desktop only.
 
 ---
 
@@ -404,13 +404,80 @@ node test/routes.test.mjs
 
 ## 发布
 
+顺序不能反：**先改版本号 → 跑测试 → 推 git → 再发 npm**。npm 包里写的是 `repository` 与线上代码，先发后推会出现「包指向一个还不存在的提交」。
+
+### 1. 版本与测试
+
 ```powershell
 cd plugins/rsa
-node --test          # 或逐个文件跑
-npm publish          # 需要 npm 登录与 2FA OTP
+# 改 package.json 的 version，并在 README 版本历史里补一行
+node --test --test-isolation=none test/*.test.mjs
 ```
 
-`files` 白名单决定包里有什么：`index.js`、`client.js`、`cordis.patch.yml`、`lib/**/*`、`bin/**`、`locale/*.json`、`icon.svg`、`docs/media/*.gif`。
+沙箱里直接 `node --test` 会在 spawn 子进程时报 `EPERM`，加 `--test-isolation=none` 让用例跑在同一进程内。
+
+### 2. 推 git
+
+```powershell
+git add -A
+git commit -m "feat: … (1.0.3)"
+git push origin master
+```
+
+工作区若在 DSH 沙箱内，`https` 需要显式后端与代理：`git -c http.sslBackend=openssl -c http.proxy=http://127.0.0.1:7897 push`。
+
+### 3. 导出干净副本（不要在工作树里发）
+
+```powershell
+mkdir -p tmp/mkt/src
+git -C . archive --format=tar HEAD | tar -x -C tmp/mkt/src
+```
+
+`git archive` 只导出已提交内容，未提交的改动不会混进 tarball。
+
+### 4. 隔离 npm CLI
+
+本机没有全局 npm（只有 DSH 自带的 pnpm），用一次性副本：
+
+```powershell
+mkdir -p tmp/mkt/npm
+curl -sL https://registry.npmjs.org/npm/-/npm-12.2.2.tgz | tar -xz --strip-components=1 -C tmp/mkt/npm
+```
+
+`tmp/mkt/npmrc` 只写一行 `registry=https://registry.npmjs.org/`；命令前设 `npm_config_userconfig` 与 `npm_config_cache` 指向 `tmp/mkt`，真 token 只放 tmp，绝不进仓库。
+
+### 5. dry-run 核对
+
+```powershell
+cd tmp/mkt/src
+node ../npm/bin/npm-cli.js publish --ignore-scripts --access public --dry-run
+```
+
+逐项确认 `name@version`、`total files`、`package size`、`shasum`，以及 `Tarball Contents` 里 `files` 白名单该有的都在：`index.js`、`client.js`、`cordis.patch.yml`、`lib/**/*`、`bin/**`、`locale/*.json`、`icon.svg`、`docs/media/*.gif`。
+
+### 6. 登录并发布（2FA）
+
+```powershell
+cd C:\Users\recko\DSH\tmp\mkt\src
+$env:npm_config_userconfig="C:\Users\recko\DSH\tmp\mkt\npmrc"
+$env:npm_config_cache="C:\Users\recko\DSH\tmp\mkt\npm-cache"
+node ..\npm\bin\npm-cli.js login --auth-type=web
+node ..\npm\bin\npm-cli.js publish --ignore-scripts --access public
+```
+
+三种分支：
+
+- 出现 `Login at: https://www.npmjs.com/login?next=/login/cli/<uuid>` → 浏览器打开确认，命令自己继续；
+- 报 `EOTP` → 末尾加 `--otp=<6位验证码>` 重跑（验证码 30 秒失效）；
+- 报 `ENEEDAUTH` / `E404` → 先重跑 `login --auth-type=web`，再 `whoami` 确认是包 owner（`beckchiang`），否则 publish 必然 404。
+
+### 7. 核验（别只看退出码）
+
+```powershell
+node -e "fetch('https://registry.npmjs.org/dsh-rsa/1.0.3').then(async r=>{console.log(r.status);const j=await r.json();console.log(j.dist.shasum)})"
+```
+
+版本端点 200 且 `shasum` 与 dry-run 一致才算成功。刚发完版本端点可能短暂 404、`dist-tags` 可能还是旧值（CDN 缓存），等 1–2 分钟再查。
 
 ---
 
