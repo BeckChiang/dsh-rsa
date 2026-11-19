@@ -45,10 +45,14 @@ function verifiedHostVersions(overrides = {}) {
   }
 }
 
-function recordCompat(report, full, overrides = {}) {
+// Records a verdict. `source` says who asked for the check (auto = startup,
+// page = settings page opened, manual = button, deploy = pre-deploy gate), so the
+// panel can tell a verdict the user triggered from one that appeared on its own.
+function recordCompat(report, full, overrides = {}, source = "manual") {
   try {
     const version = report && report.hostVersion ? report.hostVersion : null;
     const at = new Date().toISOString();
+    const previous = readState(overrides.dataDir);
     const update = {
       lastCompatAt: at,
       lastCompatHostVersion: version,
@@ -56,9 +60,17 @@ function recordCompat(report, full, overrides = {}) {
       lastCompatFull: full === true,
       lastCompatError: report && report.error ? String(report.error) : null,
       lastCompatPadding: report && report.padding ? String(report.padding) : null,
+      lastCompatSource: source,
+      lastCompatPrev: previous.lastCompatAt
+        ? {
+            at: previous.lastCompatAt,
+            hostVersion: previous.lastCompatHostVersion || null,
+            ok: previous.lastCompatOk === true,
+            source: previous.lastCompatSource || null,
+          }
+        : null,
     };
     if (report && report.ok === true && version) {
-      const previous = readState(overrides.dataDir);
       const list = (Array.isArray(previous.verifiedHosts) ? previous.verifiedHosts : [])
         .filter((entry) => entry && typeof entry === "object" && entry.version !== version)
         .slice(-19);
@@ -73,10 +85,17 @@ function recordCompat(report, full, overrides = {}) {
 
 // Runs the full check (round-trip included) and remembers it. Called before
 // every deployment and once automatically when the host build is new to us.
-function runFullCheck(overrides = {}) {
+function runFullCheck(overrides = {}, source = "manual") {
   const report = checkCompatibility(overrides, { full: true, verifiedHosts: verifiedHostVersions(overrides) });
-  recordCompat(report, true, overrides);
+  recordCompat(report, true, overrides, source);
   return report;
+}
+
+// Who asked for the check. Anything else (an unknown query value, a missing one)
+// is the settings page asking, which is the least surprising default.
+const COMPAT_SOURCES = ["auto", "page", "manual", "deploy"];
+function compatSource(value) {
+  return COMPAT_SOURCES.includes(value) ? value : "page";
 }
 
 export const name = "dsh-rsa";
@@ -229,8 +248,9 @@ export async function handle(ctx, req, res) {
     // off with ?full=0 when the caller only wants the cheap checks.
     try {
       const full = url.searchParams.get("full") !== "0";
+      const source = compatSource(url.searchParams.get("source"));
       const report = checkCompatibility(overrides, { full, verifiedHosts: verifiedHostVersions(overrides) });
-      if (full) recordCompat(report, true, overrides);
+      if (full) recordCompat(report, true, overrides, source);
       sendJson(res, 200, { ok: true, report, compat: compatibilityStatus(overrides) });
     } catch (error) {
       sendJson(res, 500, { ok: false, error: error instanceof Error ? error.message : String(error) });
@@ -251,7 +271,7 @@ export async function handle(ctx, req, res) {
       const config = normalizeConfig(raw.config ?? raw);
       // Re-check immediately before touching the archive: the host may have been
       // updated between opening this page and pressing the button.
-      const pre = runFullCheck(overrides);
+      const pre = runFullCheck(overrides, "deploy");
       if (!pre.ok) {
         sendJson(res, 409, { ok: false, error: "compatibility check failed", report: pre, compat: compatibilityStatus(overrides) });
         return;
@@ -303,11 +323,15 @@ export function apply(ctx) {
     try {
       const status = compatibilityStatus();
       if (!status.needed) return;
-      const report = runFullCheck();
+      const report = runFullCheck({}, "auto");
+      const after = compatibilityStatus();
       console.log(
         `[rsa] automatic compatibility check (${status.reason}, host ${report.hostVersion || "?"}): ${report.ok ? "passed" : "FAILED"}` +
           (report.ok ? "" : " — deep deployment is blocked until this is fixed"),
       );
+      if (after.recovered) {
+        console.log(`[rsa] compatibility recovered automatically for host ${after.hostVersion}; earlier failure cleared`);
+      }
     } catch (error) {
       console.log("[rsa] automatic compatibility check failed:", error && error.message ? error.message : String(error));
     }

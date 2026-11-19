@@ -152,7 +152,7 @@ DSH 升级会整包换掉 `app.asar`。本插件要往这个归档里写文件�
 2. **宿主升级过** —— 上次记录里的 `lastCompatHostVersion` 与当前 `app.asar` 的 `package.json.version` 不一致（升级会换掉归档，旧结论对新包无效）；
 3. **上次检查失败** —— `last-failed`，一直提醒到通过为止。
 
-命中时插件加载 5 秒后**自动跑一次全量检查**并记录（启动日志 `[rsa] automatic compatibility check (<reason>, host <version>): passed`），设置页打开时若仍缺结论也补跑一次。结论按宿主版本写入 `state.json`：`lastCompatAt` / `lastCompatHostVersion` / `lastCompatOk` / `lastCompatFull` / `lastCompatError`。
+命中时插件加载 5 秒后**自动跑一次全量检查**并记录（启动日志 `[rsa] automatic compatibility check (<reason>, host <version>): passed`），设置页打开时若仍缺结论也补跑一次。结论按宿主版本写入 `state.json`：`lastCompatAt` / `lastCompatHostVersion` / `lastCompatOk` / `lastCompatFull` / `lastCompatError` / `lastCompatPadding` / `lastCompatSource`（谁触发的）/ `lastCompatPrev`（被这次取代的上一条结论）。
 
 **DSH 更新后**：先打开设置页看红字 → 等它自动跑完或点「立即检查」→ 若 `roundtrip` 或 `header` 变 `FAIL`，说明归档布局变了，**此时别部署**，升级插件或等适配。
 
@@ -175,6 +175,18 @@ asar 头部 JSON 之后有 0–3 个**对齐填充字节**。Electron 从不读�
 - 清单本身降级成"标签"——**探测结果才是判定依据**，宿主升级后不必等插件发版，跑通一次就自动恢复。
 
 派生效果：DSH 每次换版只会让检查重跑一次（`host-updated`），跑通即消警，不会像以前那样一直红着。
+
+### 自愈要在界面上看得见（1.0.2）
+
+1.0.1 的自愈做对了事，但**没有告诉人**：红条自己消失、版本行从 `WARN` 变成「本机已验证」，两者都是"安静的成功"，用户只会觉得提示莫名不见了。1.0.2 把这件事摆到明面上：
+
+- **检查有时间、有来源**：`/rsa/compat` 接受 `?source=auto|page|manual|deploy`，结论记 `lastCompatSource`，设置页显示「最近一次检查：自动 · 通过 · 2026-11-19 14:07」（字号小、灰色，不抢主状态）。
+- **自动检查清掉旧失败时弹绿色信息条**：`compatStatus()` 计算 `recovered`（本次是自动检查、是否通过、上一条是否同版本失败），成立时顶部出现绿色条「兼容性已自动恢复：主机 0.2.2-rc.5 已在本机通过全部检查（…），此前的失败记录已清除」。红条消失变成一件有解释的事。
+- **状态文字分档**：版本行是"本机验证"时显示「兼容（本机已验证）：可以安全部署」，不再用「兼容（有提醒）」把人往"没验证"上误导；`compatCheckVersion` 的文案也改成「主机版本在测试清单内，或已在本机验证」。
+- **没跑过检查也有结论**：面板优先用 `state.json` 里已有的结论回答"能不能部署"，不再因为这次没点按钮就只说「还没有运行过兼容性检查」。
+- **看得见两份清单**：主机版本行带上「头部填充: 0x00」；下方列出「本机已验证的宿主版本」（版本 · 填充 · 时间，最多 20 条），自愈留痕可查。
+
+> 服务端路由（`?source=`、`lastCompatPrev`）改动**要重启 DSH** 才生效；只改文案刷新页面即可。
 
 ---
 
@@ -320,6 +332,7 @@ DSH 起不来时，双击它即可把 `app.asar.rsa-backup` 复制回 `app.asar`
 
 | 版本 | 要点 |
 | --- | --- |
+| 1.0.2 | 让自愈可见：`?source=` 记录检查来源、「最近一次检查」一行、自动检查清掉旧失败时弹绿色「兼容性已自动恢复」条、状态文字分「本机已验证」档、未手动检查也显示已有结论、面板列出 `verifiedHosts` 与宿主头部填充 |
 | 1.0.1 | 修「宿主填充字节不同 → 误判不兼容」：填充字节按宿主读写、`roundtrip` 改分区比对；版本清单降级为标签，本机验证通过即记入 `verifiedHosts`，DSH 换版不必等插件发版 |
 | 1.0.0 | 预览改浅色/深色并排 + 三态切换（省一半纵向空间）；README 重写，踩坑全量归档；版本号进入 1.x |
 | 0.2.7 | 修设置页 `cannot get property "rsaPaths" without inject`（cordis ctx 是 Proxy）；测试改用 `strictCtx()` |
@@ -377,14 +390,14 @@ node test/compat.test.mjs
 node test/routes.test.mjs
 ```
 
-当前 **55 项**全绿，覆盖：
+当前 **56 项**全绿，覆盖：
 
 - **asar**：在干净归档里追加新文件与缺失目录、替换后的偏移与 integrity、父节点是文件时报错、带 4 字节填充的头部能被正确解析、重打包后字节不变、payload 被移动时 `verifyAsar()` 能查出、**宿主的填充字节（NUL / 空格）被读出并原样写回**、`compareArchives()` 能区分"只在填充上不同"与"真差异"；
 - **hook**：幂等、shebang 处理；
 - **deploy**：首次部署、失败清理 pending、非 Windows 拒绝部署；
 - **apply**：**宿主仍持有 `app.asar` 时经复制路径换入成功（`mode: "copy"`）**、启动阶段只校验不换入、损坏 pending 被丢弃且不动 live、跨版本 pending 被丢弃、重复部署不重复插桩、回滚脚本内容与位置；
 - **compat**：7 项检查在正常归档上通过、截断/损坏/入口不可解析时判失败、未测试版本只 `WARN`、检查本身不改归档、**两种填充约定下的 `roundtrip` 都通过且报告填充字节**、`verifiedHosts` 让已知版本不再 `WARN`；`compatStatus` 的五种判定（首次 / 命中 / 升级后失效 / 上次失败 / 找不到归档）；
-- **routes**：未带 `confirmed: true` 的部署一律 400 且不写盘、`/state` 带出 `compat`、全量检查后提醒消失、**未知宿主版本通过全量检查后被记入 `verifiedHosts` 并停止告警**、宿主换版后重新提醒、临时安装不改写随插件发行的回滚脚本、`strictCtx()` 防止再读 ctx 未知属性。
+- **routes**：未带 `confirmed: true` 的部署一律 400 且不写盘、`/state` 带出 `compat`、全量检查后提醒消失、**未知宿主版本通过全量检查后被记入 `verifiedHosts` 并停止告警**、**记录检查来源与被取代的上一条结论（`lastCompatSource` / `lastCompatPrev`），未知来由回退成「打开设置页」**、宿主换版后重新提醒、临时安装不改写随插件发行的回滚脚本、`strictCtx()` 防止再读 ctx 未知属性。
 
 ---
 
@@ -409,6 +422,7 @@ npm publish          # 需要 npm 登录与 2FA OTP
 - 设置页的实时预览通过 `POST /rsa/preview` 生成，iframe 以 `srcdoc` 渲染；并排模式下是两次请求（同一份配置、两套主题），服务端是纯字符串渲染，成本可忽略。
 - DSH 升级会覆盖 `app.asar`，届时重新部署一次即可（插桩会自动补回）。
 - `roundtrip` 只对"宿主真正读的区域"（头部 JSON + payload）做强判据；头部填充字节按宿主学习，差异仅提示，不算失败。
+- 设置页的结论优先取 `state.json` 里最近一次记录，所以它**描述的是那次检查时的归档**；「最近一次检查」一行的时间与来源就是判断它是否过期的依据，点一次「运行兼容性检查」即可重新对当前归档下结论。
 
 ---
 

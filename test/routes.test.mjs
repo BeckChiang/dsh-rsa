@@ -159,6 +159,41 @@ test("a passing check on an unknown host build is remembered", async () => {
   }
 });
 
+// The panel has to say who asked for a check and whether it replaced a failure,
+// otherwise an automatic pass is invisible: the banner simply disappears.
+test("the recorder keeps the trigger and the verdict it replaced", async () => {
+  const fixture = makePaddedFixture(0x00);
+  try {
+    fs.mkdirSync(fixture.dataDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(fixture.dataDir, "state.json"),
+      JSON.stringify({
+        lastCompatAt: "2026-01-01T00:00:00.000Z",
+        lastCompatHostVersion: "9.9.9",
+        lastCompatOk: false,
+        lastCompatFull: true,
+        lastCompatSource: "auto",
+      }),
+      "utf8",
+    );
+    const ctx = ctxFor(fixture);
+    const first = await call(ctx, "GET", "/rsa/compat?source=auto");
+    assert.equal(first.status, 200);
+    const state = JSON.parse(fs.readFileSync(path.join(fixture.dataDir, "state.json"), "utf8"));
+    assert.equal(state.lastCompatSource, "auto", "the trigger must be recorded");
+    assert.equal(state.lastCompatPrev.ok, false, "the verdict it replaced must be kept");
+    assert.equal(state.lastCompatPrev.hostVersion, "9.9.9");
+    assert.equal(first.json.compat.recovered, true, "an automatic pass that replaces a failure must be announced");
+
+    const second = await call(ctx, "GET", "/rsa/compat?source=bogus");
+    const after = JSON.parse(fs.readFileSync(path.join(fixture.dataDir, "state.json"), "utf8"));
+    assert.equal(after.lastCompatSource, "page", "an unknown trigger falls back to the settings page");
+    assert.equal(second.json.compat.recovered, false, "a page-triggered pass is not the recovery story");
+  } finally {
+    fixture.cleanup();
+  }
+});
+
 test("a host update makes the recorded check stale again", async () => {
   const fixture = makeFixture();
   try {

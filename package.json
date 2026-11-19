@@ -1,6 +1,6 @@
 {
   "name": "dsh-rsa",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Configurable startup splash screen for DeepSeek Harness desktop (Windows): real main-process animation, live light/dark preview, compatibility checks, one-click deep deploy into app.asar, and a rollback script that ships with the plugin.",
   "type": "module",
   "license": "MIT",

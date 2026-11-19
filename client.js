@@ -192,19 +192,35 @@ window.__ModuleLoader__.load({
         compatRun: '运行兼容性检查',
         compatRunning: '检查中…（要重打包一次，约数秒）',
         compatOk: '兼容：可以安全部署',
+        compatVerified: '兼容（本机已验证）：可以安全部署',
         compatWarn: '兼容（有提醒）：可以部署，但主机版本不在插件的测试清单内',
         compatFail: '不兼容：请勿部署',
+        compatRecovered: '兼容性已自动恢复：主机 {host} 已在本机通过全部检查（{at}），此前的失败记录已清除。',
         compatHost: '主机版本',
         compatTested: '测试清单',
         compatCheckedAt: '检查时间',
         compatNever: '还没有运行过兼容性检查',
+        compatNeedCheck: '需要重新检查（见上方提示）',
+        compatLastCheck: '最近一次检查',
+        compatLastAuto: '插件启动时自动跑',
+        compatPrevFailed: '上一次检查失败（{at}），已由本次检查清除',
+        compatVerifiedList: '本机已验证的宿主版本',
+        compatVerifiedNone: '暂无（通过一次全量检查后自动记录）',
+        compatPadding: '头部填充',
+        compatResultOk: '通过',
+        compatResultFail: '失败',
+        compatQuick: '仅快速检查',
+        srcAuto: '自动',
+        srcPage: '打开设置页时',
+        srcManual: '手动',
+        srcDeploy: '部署前',
         compatCheckFile: '找到 app.asar',
         compatCheckHeader: '头部长度字段自洽',
         compatCheckLayout: 'payload 偏移与原文件对齐',
         compatCheckIntegrity: '全量 SHA256 校验',
         compatCheckEntry: '主入口可解析',
         compatCheckRoundtrip: '原样重打包字节一致',
-        compatCheckVersion: '主机版本在测试清单内',
+        compatCheckVersion: '主机版本在测试清单内，或已在本机验证',
         rollbackTitle: '回滚脚本',
         rollbackHint: '随插件一起安装。DSH 起不来时双击它即可把 app.asar 恢复成官方原版（会先确认 DSH 未在运行）。',
         rollbackYes: '已安装',
@@ -326,19 +342,35 @@ window.__ModuleLoader__.load({
         compatRun: 'Run compatibility check',
         compatRunning: 'Checking… (one re-pack, a few seconds)',
         compatOk: 'Compatible: safe to deploy',
+        compatVerified: 'Compatible (verified locally): safe to deploy',
         compatWarn: 'Compatible with a warning: deployable, but this host version is not on the tested list',
         compatFail: 'Not compatible: do not deploy',
+        compatRecovered: 'Compatibility recovered automatically: host {host} passed every check on this machine ({at}), and the earlier failure has been cleared.',
         compatHost: 'Host version',
         compatTested: 'Tested',
         compatCheckedAt: 'Checked',
         compatNever: 'The compatibility check has not been run yet',
+        compatNeedCheck: 'Needs a fresh check (see the notice above)',
+        compatLastCheck: 'Last check',
+        compatLastAuto: 'ran automatically at plugin start',
+        compatPrevFailed: 'The previous check failed ({at}); this check cleared it',
+        compatVerifiedList: 'Host versions verified on this machine',
+        compatVerifiedNone: 'None yet (recorded after one full check passes)',
+        compatPadding: 'Header padding',
+        compatResultOk: 'passed',
+        compatResultFail: 'failed',
+        compatQuick: 'quick checks only',
+        srcAuto: 'automatic',
+        srcPage: 'settings page opened',
+        srcManual: 'manual',
+        srcDeploy: 'pre-deploy',
         compatCheckFile: 'app.asar found',
         compatCheckHeader: 'Header length fields agree',
         compatCheckLayout: 'Payload offset matches the original file',
         compatCheckIntegrity: 'Full SHA256 verification',
         compatCheckEntry: 'Main entry parses',
         compatCheckRoundtrip: 'Unchanged re-pack is byte-identical',
-        compatCheckVersion: 'Host version is on the tested list',
+        compatCheckVersion: 'Host version is on the tested list or verified locally',
         rollbackTitle: 'Rollback script',
         rollbackHint: 'Installed together with this plugin. If DSH stops starting, double-click it to restore the original app.asar (it first makes sure DSH is not running).',
         rollbackYes: 'installed',
@@ -423,6 +455,24 @@ window.__ModuleLoader__.load({
         flexWrap: 'wrap',
       },
       bannerText: { flex: '1 1 260px', minWidth: 0 },
+      // Same frame as S.banner but green: it announces good news (a check that
+      // cleared an earlier failure) rather than asking for action.
+      bannerOk: {
+        flex: '0 0 auto',
+        margin: '0 16px 8px',
+        padding: '9px 12px',
+        borderRadius: 8,
+        border: '1px solid rgba(34,197,94,.45)',
+        background: 'rgba(34,197,94,.10)',
+        color: '#15803d',
+        fontSize: 12.5,
+        fontWeight: 600,
+        lineHeight: 1.55,
+        display: 'flex',
+        alignItems: 'center',
+        gap: 10,
+        flexWrap: 'wrap',
+      },
       bannerBtn: {
         padding: '4px 12px',
         borderRadius: 6,
@@ -624,11 +674,11 @@ window.__ModuleLoader__.load({
       const [error, setError] = useState('');
       const t = TEXT[lang] || TEXT.zh;
 
-      const runCompat = useCallback(async () => {
+      const runCompat = useCallback(async (source = 'page') => {
         setChecking(true);
         setError('');
         setMessage('');
-        const res = await api('/compat');
+        const res = await api('/compat?source=' + encodeURIComponent(source));
         setChecking(false);
         if (res.ok) {
           setCompat(res.report);
@@ -648,7 +698,7 @@ window.__ModuleLoader__.load({
             setNotice(data.compat || null);
             // First install or a host update: check once by itself so the banner
             // can report a verdict instead of just asking the user to do it.
-            if (data.compat && data.compat.needed) runCompat();
+            if (data.compat && data.compat.needed) runCompat('page');
           } else setError(data.error || 'Failed to load RSA state');
         });
         return () => {
@@ -690,13 +740,73 @@ window.__ModuleLoader__.load({
 
       const checkLabel = useCallback((id) => t[CHECK_LABEL[id]] || id, [t]);
 
+      const fmtTime = useCallback((iso) => {
+        if (!iso) return '?';
+        const when = new Date(iso);
+        return Number.isNaN(when.getTime()) ? String(iso) : when.toLocaleString(lang === 'zh' ? 'zh-CN' : undefined);
+      }, [lang]);
+
+      const sourceLabel = useCallback((src) => {
+        if (src === 'auto') return t.srcAuto;
+        if (src === 'deploy') return t.srcDeploy;
+        if (src === 'manual') return t.srcManual;
+        return t.srcPage;
+      }, [t]);
+
+      // What the panel says before anyone presses a button. A stored verdict is
+      // enough to answer "am I compatible?", and when the plugin checked itself
+      // the panel has to say so: the banner used to just disappear.
+      const stored = notice && notice.last && notice.last.at ? notice.last : null;
+      const hostInfo = compat || notice;
+      const verifiedRow = compat ? compat.checks.find((c) => c.id === 'version') : null;
+      const verifiedHere = Boolean(verifiedRow && verifiedRow.ok && !verifiedRow.warn);
+      let verdictText = t.compatNever;
+      let verdictMuted = true;
+      if (compat && compat.ok) {
+        verdictText = verifiedHere ? t.compatVerified : compat.checks.some((c) => c.warn) ? t.compatWarn : t.compatOk;
+        verdictMuted = false;
+      } else if (compat) {
+        verdictText = t.compatFail;
+        verdictMuted = false;
+      } else if (stored && notice && !notice.needed) {
+        verdictText = stored.ok ? (notice.verifiedLocally ? t.compatVerified : t.compatWarn) : t.compatFail;
+        verdictMuted = false;
+      } else if (stored) {
+        // A stored verdict for a different build: the banner above explains why
+        // it no longer applies, so do not restate it as if it were current.
+        verdictText = t.compatNeedCheck;
+      }
+      const hostLine = hostInfo
+        ? t.compatHost + ': ' + (hostInfo.hostVersion || '?') +
+          ' · ' + t.compatTested + ': ' + (hostInfo.testedVersions || []).join(', ') +
+          (hostInfo.last && hostInfo.last.padding ? ' · ' + t.compatPadding + ': 0x' + hostInfo.last.padding : '')
+        : null;
+      const lastLine = stored
+        ? t.compatLastCheck + ': ' + sourceLabel(stored.source) + ' · ' + (stored.ok ? t.compatResultOk : t.compatResultFail) +
+          ' · ' + fmtTime(stored.at) + (stored.full ? '' : ' · ' + t.compatQuick)
+        : null;
+      const prevLine = notice && notice.previous && notice.previous.ok === false && stored && stored.ok
+        ? t.compatPrevFailed.replace('{at}', fmtTime(notice.previous.at))
+        : null;
+      const verifiedRows = notice && Array.isArray(notice.verifiedHosts)
+        ? [...notice.verifiedHosts].reverse().map((entry, i) =>
+            h(
+              'div',
+              { key: entry.version + ':' + i, style: S.check },
+              '• ' + entry.version +
+                (entry.padding ? ' · ' + t.compatPadding + ': 0x' + entry.padding : '') +
+                (entry.at ? ' · ' + fmtTime(entry.at) : ''),
+            ),
+          )
+        : [];
+
       // Step 1: prove the archive is safe to rewrite, then ask for confirmation.
       // Nothing touches app.asar until step 2.
       const requestDeploy = useCallback(async () => {
         setBusy(true);
         setError('');
         setMessage('');
-        const res = await runCompat();
+        const res = await runCompat('deploy');
         setBusy(false);
         if (!res || !res.ok || !res.report || !res.report.ok) {
           if (res && res.report) setCompat(res.report);
@@ -761,8 +871,21 @@ window.__ModuleLoader__.load({
               h('span', { style: S.bannerText }, bannerText),
               h(
                 'button',
-                { style: S.bannerBtn, onClick: runCompat, disabled: checking || busy },
+                { style: S.bannerBtn, onClick: () => runCompat('manual'), disabled: checking || busy },
                 checking ? t.bannerRunning : (notice && notice.last && notice.last.at ? t.bannerRetry : t.bannerRun),
+              ),
+            )
+          : null,
+        notice && !notice.needed && notice.recovered
+          ? h(
+              'div',
+              { style: S.bannerOk },
+              h(
+                'span',
+                { style: S.bannerText },
+                t.compatRecovered
+                  .replace('{host}', notice.hostVersion || '?')
+                  .replace('{at}', fmtTime(stored && stored.at)),
               ),
             )
           : null,
@@ -840,23 +963,41 @@ window.__ModuleLoader__.load({
             h(
               'div',
               { style: { display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' } },
-              h('button', { style: S.btn, onClick: runCompat, disabled: busy || checking }, checking ? t.compatRunning : t.compatRun),
-              compat
-                ? h('span', { style: { fontSize: 12, fontWeight: 600 } }, compat.ok ? (compat.checks.some((c) => c.warn) ? t.compatWarn : t.compatOk) : t.compatFail)
-                : h('span', { style: { fontSize: 12, opacity: 0.6 } }, t.compatNever),
+              h('button', { style: S.btn, onClick: () => runCompat('manual'), disabled: busy || checking }, checking ? t.compatRunning : t.compatRun),
+              h('span', { style: verdictMuted ? { fontSize: 12, opacity: 0.6 } : { fontSize: 12, fontWeight: 600 } }, verdictText),
             ),
-            compat
+            hostLine
               ? h(
                   'div',
                   { style: { marginTop: 8 } },
-                  h('div', { style: S.status }, t.compatHost + ': ' + (compat.hostVersion || '?') + ' · ' + t.compatTested + ': ' + (compat.testedVersions || []).join(', ')),
-                  compat.checks.map((c, i) =>
-                    h(
-                      'div',
-                      { key: c.id || i, style: c.ok ? S.check : S.checkFail },
-                      (c.ok ? '✓ ' : c.warn ? '! ' : '✗ ') + checkLabel(c.id) + (c.detail ? ' — ' + c.detail : ''),
-                    ),
-                  ),
+                  h('div', { style: S.status }, hostLine),
+                  compat
+                    ? compat.checks.map((c, i) =>
+                        h(
+                          'div',
+                          { key: c.id || i, style: c.ok ? S.check : S.checkFail },
+                          (c.ok ? '✓ ' : c.warn ? '! ' : '✗ ') + checkLabel(c.id) + (c.detail ? ' — ' + c.detail : ''),
+                        ),
+                      )
+                    : null,
+                )
+              : null,
+            lastLine || prevLine
+              ? h(
+                  'div',
+                  { style: { marginTop: 8 } },
+                  lastLine ? h('div', { style: S.status }, lastLine) : null,
+                  prevLine ? h('div', { style: { ...S.status, opacity: 0.75 } }, prevLine) : null,
+                )
+              : null,
+            notice
+              ? h(
+                  'div',
+                  { style: { marginTop: 10 } },
+                  h('div', { style: S.status }, t.compatVerifiedList),
+                  verifiedRows.length
+                    ? h('div', null, verifiedRows)
+                    : h('div', { style: { fontSize: 12, opacity: 0.55 } }, t.compatVerifiedNone),
                 )
               : null,
             h(
