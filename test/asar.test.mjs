@@ -7,7 +7,7 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import test from "node:test";
-import { readAsar, readFileFromAsar, repackAsar, verifyAsar, walkFiles } from "../lib/asar.mjs";
+import { readAsar, readFileFromAsar, repackAsar, verifyAsar, walkFiles, compareArchives } from "../lib/asar.mjs";
 import { buildAsar, hostFiles, listEntries, makeFixture, readEntry } from "./helpers.mjs";
 
 function withFixture(files, fn) {
@@ -123,9 +123,9 @@ test("repackAsar copies the payload unchanged when nothing is replaced", () =>
 // head[12] (raw JSON length) is NOT the distance to the payload. Reading
 // dataOffset as `16 + head[12]` shifted every file by up to 3 bytes, which made
 // the repacked app.asar unloadable (DSH died at startup with no useful error).
-function archiveWithPaddedHeader(files) {
+function archiveWithPaddedHeader(files, options = {}) {
   for (let n = 0; n < 8; n += 1) {
-    const buf = buildAsar({ ...files, [`pad-${n}.txt`]: "x".repeat(n) });
+    const buf = buildAsar({ ...files, [`pad-${n}.txt`]: "x".repeat(n) }, options);
     const jsonLen = buf.readUInt32LE(12);
     if (jsonLen % 4 !== 0) return buf;
   }
@@ -227,3 +227,99 @@ test("buildAsar fixture is readable by readAsar", () => {
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+// The header's dead padding is never read by Electron, but it is part of the
+// file. electron-builder fills it with NUL while older asar tooling filled it
+// with a space; the repacker used to hardcode the space, so a round trip of the
+// real DSH build reported "same size, different bytes" and blocked deployment.
+// The writer must reproduce whatever byte the host used, not its own favourite.
+const PAD_CASES = [
+  ["NUL", 0x00],
+  ["space", 0x20],
+];
+
+function withPaddedDir(name, fn) {
+  const dir = fs.mkdtempSync(path.join(process.env.TEMP ?? "/tmp", `dsh-rsa-${name}-`));
+  try {
+    return fn(dir);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+test("readAsar reports the padding byte the host wrote", () =>
+  withPaddedDir("padbyte", (dir) => {
+    const files = { "package.json": JSON.stringify({ main: "lib/main.js" }), "lib/main.js": "alpha" };
+    for (const [label, paddingByte] of PAD_CASES) {
+      const file = path.join(dir, `${label}.asar`);
+      fs.writeFileSync(file, archiveWithPaddedHeader(files, { paddingByte }));
+      const asar = readAsar(file);
+      try {
+        assert.equal(asar.padding.length, asar.headerSize - asar.jsonLen, `${label}: padding length`);
+        assert.ok(asar.padding.length > 0, `${label}: fixture must be padded`);
+        assert.equal(asar.paddingByte, paddingByte, `${label}: padding byte`);
+        assert.equal(readFileFromAsar(asar, "lib/main.js").toString("utf8"), "alpha", `${label}: payload still readable`);
+      } finally {
+        fs.closeSync(asar.fd);
+      }
+    }
+  }));
+
+test("repackAsar writes back the host's padding byte, so a clean repack is byte-identical", () =>
+  withPaddedDir("padrepack", (dir) => {
+    const files = hostFiles({ "assets/blob.bin": Buffer.from([1, 2, 3, 4, 5]) });
+    for (const [label, paddingByte] of PAD_CASES) {
+      const source = path.join(dir, `${label}-src.asar`);
+      const out = path.join(dir, `${label}-out.asar`);
+      fs.writeFileSync(source, archiveWithPaddedHeader(files, { paddingByte }));
+      const asar = readAsar(source);
+      let meta;
+      try {
+        repackAsar(asar, out, new Map());
+        meta = { jsonLen: asar.jsonLen, headerSize: asar.headerSize };
+      } finally {
+        fs.closeSync(asar.fd);
+      }
+      const cmp = compareArchives(source, out, meta);
+      assert.equal(cmp.equal, true, `${label}: repack must be byte-identical (${JSON.stringify(cmp)})`);
+      assert.equal(cmp.paddingEqual, true, `${label}: padding must be preserved`);
+    }
+  }));
+
+test("compareArchives tells a padding-only difference from a real one", () =>
+  withPaddedDir("cmparch", (dir) => {
+    const files = hostFiles({ "assets/blob.bin": Buffer.from([9, 8, 7, 6, 5]) });
+    const source = path.join(dir, "nul.asar");
+    const spaced = path.join(dir, "space.asar");
+    fs.writeFileSync(source, archiveWithPaddedHeader(files, { paddingByte: 0x00 }));
+    fs.writeFileSync(spaced, archiveWithPaddedHeader(files, { paddingByte: 0x20 }));
+
+    const asar = readAsar(source);
+    let meta;
+    try {
+      meta = { jsonLen: asar.jsonLen, headerSize: asar.headerSize };
+    } finally {
+      fs.closeSync(asar.fd);
+    }
+
+    const paddingOnly = compareArchives(source, spaced, meta);
+    assert.equal(paddingOnly.equal, false, "different padding is not byte-equal");
+    assert.equal(paddingOnly.sizeEqual, true);
+    assert.equal(paddingOnly.jsonEqual, true);
+    assert.equal(paddingOnly.payloadEqual, true);
+    assert.equal(paddingOnly.paddingEqual, false);
+
+    // Now make a real difference: flip a payload byte.
+    const corrupted = path.join(dir, "corrupt.asar");
+    const buf = fs.readFileSync(source);
+    const asarForOffset = readAsar(source);
+    const at = asarForOffset.dataOffset + 2;
+    fs.closeSync(asarForOffset.fd);
+    buf[at] ^= 0xff;
+    fs.writeFileSync(corrupted, buf);
+    const real = compareArchives(source, corrupted, meta);
+    assert.equal(real.equal, false);
+    assert.equal(real.payloadEqual, false);
+    assert.equal(real.paddingEqual, true);
+    assert.equal(real.jsonEqual, true);
+  }));

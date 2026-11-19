@@ -30,15 +30,42 @@ function compatibilityStatus(overrides = {}) {
   }
 }
 
+// Host builds whose full probe passed on this machine. Recorded so that a DSH
+// update does not need a plugin release just to clear the "untested version" row:
+// the archive probes are the real authority, the list is only a label.
+function verifiedHostVersions(overrides = {}) {
+  try {
+    const state = readState(overrides.dataDir);
+    const list = Array.isArray(state.verifiedHosts) ? state.verifiedHosts : [];
+    return list
+      .map((entry) => (typeof entry === "string" ? entry : entry && entry.version))
+      .filter((version) => typeof version === "string" && version);
+  } catch {
+    return [];
+  }
+}
+
 function recordCompat(report, full, overrides = {}) {
   try {
-    writeState({
-      lastCompatAt: new Date().toISOString(),
-      lastCompatHostVersion: report && report.hostVersion ? report.hostVersion : null,
+    const version = report && report.hostVersion ? report.hostVersion : null;
+    const at = new Date().toISOString();
+    const update = {
+      lastCompatAt: at,
+      lastCompatHostVersion: version,
       lastCompatOk: Boolean(report && report.ok === true),
       lastCompatFull: full === true,
       lastCompatError: report && report.error ? String(report.error) : null,
-    }, overrides.dataDir);
+      lastCompatPadding: report && report.padding ? String(report.padding) : null,
+    };
+    if (report && report.ok === true && version) {
+      const previous = readState(overrides.dataDir);
+      const list = (Array.isArray(previous.verifiedHosts) ? previous.verifiedHosts : [])
+        .filter((entry) => entry && typeof entry === "object" && entry.version !== version)
+        .slice(-19);
+      list.push({ version, padding: update.lastCompatPadding, at });
+      update.verifiedHosts = list;
+    }
+    writeState(update, overrides.dataDir);
   } catch (error) {
     console.log("[rsa] could not record the compatibility result:", error && error.message ? error.message : String(error));
   }
@@ -47,7 +74,7 @@ function recordCompat(report, full, overrides = {}) {
 // Runs the full check (round-trip included) and remembers it. Called before
 // every deployment and once automatically when the host build is new to us.
 function runFullCheck(overrides = {}) {
-  const report = checkCompatibility(overrides, { full: true });
+  const report = checkCompatibility(overrides, { full: true, verifiedHosts: verifiedHostVersions(overrides) });
   recordCompat(report, true, overrides);
   return report;
 }
@@ -202,7 +229,7 @@ export async function handle(ctx, req, res) {
     // off with ?full=0 when the caller only wants the cheap checks.
     try {
       const full = url.searchParams.get("full") !== "0";
-      const report = checkCompatibility(overrides, { full });
+      const report = checkCompatibility(overrides, { full, verifiedHosts: verifiedHostVersions(overrides) });
       if (full) recordCompat(report, true, overrides);
       sendJson(res, 200, { ok: true, report, compat: compatibilityStatus(overrides) });
     } catch (error) {

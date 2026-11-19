@@ -141,8 +141,8 @@ DSH 升级会整包换掉 `app.asar`。本插件要往这个归档里写文件�
 | `layout` | 每个 entry 的 `offset + size` 落在数据区内；对齐空隙只记录不判失败 | 归档内部偏移不自洽 |
 | `integrity` | 全量重算 SHA256（约 2 万个文件） | 归档已被改坏，或读取偏移错位 |
 | `entry` | `package.json` 的 `main` 能读出来、内容像 JS、注入插桩后确实带 hook | 入口不可解析，注入了也起不来 |
-| `roundtrip` | 把当前归档**原样重打包一次**，要求字节完全一致 | 本插件的写入器与这版宿主不对齐 —— **只有这项能证明写进去是安全的** |
-| `version` | 宿主版本在 `lib/compat.mjs` 的 `TESTED_HOST_VERSIONS` 里 | 只是 `WARN`，不阻塞，但提示升级插件后重测 |
+| `roundtrip` | 把当前归档**原样重打包一次**，按区域比对（preamble / 头部 JSON / 填充 / payload），前三个区域加 payload 必须完全一致 | 本插件的写入器与这版宿主不对齐 —— **只有这项能证明写进去是安全的** |
+| `version` | 宿主版本在 `TESTED_HOST_VERSIONS` 里，或已记在 `state.json` 的 `verifiedHosts`（本机探测全通过） | 只是 `WARN`，不阻塞，只表示"没在真机验证过" |
 
 ### 什么时候该跑
 
@@ -155,6 +155,26 @@ DSH 升级会整包换掉 `app.asar`。本插件要往这个归档里写文件�
 命中时插件加载 5 秒后**自动跑一次全量检查**并记录（启动日志 `[rsa] automatic compatibility check (<reason>, host <version>): passed`），设置页打开时若仍缺结论也补跑一次。结论按宿主版本写入 `state.json`：`lastCompatAt` / `lastCompatHostVersion` / `lastCompatOk` / `lastCompatFull` / `lastCompatError`。
 
 **DSH 更新后**：先打开设置页看红字 → 等它自动跑完或点「立即检查」→ 若 `roundtrip` 或 `header` 变 `FAIL`，说明归档布局变了，**此时别部署**，升级插件或等适配。
+
+### 写入器学宿主，而不是假设宿主
+
+asar 头部 JSON 之后有 0–3 个**对齐填充字节**。Electron 从不读它，但它是文件的一部分，历史上有两种写法：electron-builder 填 `0x00`，老 asar 工具填空格。1.0.0 恒定写空格，而 0.2.2-rc.5 的真机归档是 NUL —— 于是"原样重打包"永远报"尺寸一样、字节不同"，把一个安全的包判成不兼容，挡住了部署。
+
+1.0.1 起：
+
+- `readAsar()` 读出填充区并返回 `paddingByte`，重打包**原样写回**，宿主换写法也自动跟随；
+- `roundtrip` 改用 `compareArchives()` 做区域比对：preamble / 头部 JSON / payload 必须逐字节相等，填充不同只在 detail 里写出双方的值（`host 0x00 vs ours 0x20`），不判失败；
+- 结论里多记一个 `lastCompatPadding`，面板能看到宿主用的是哪种填充。
+
+### 版本清单会自我恢复
+
+`TESTED_HOST_VERSIONS` 只有手工验证过的版本，硬编码清单总会落后于 DSH 的发布节奏。所以：
+
+- 全量检查**通过**时，把宿主版本写进 `state.json` 的 `verifiedHosts`（最多 20 条，带填充字节与时间）；
+- 之后的检查把它显示为 `was verified locally`，而不是 `WARN`；
+- 清单本身降级成"标签"——**探测结果才是判定依据**，宿主升级后不必等插件发版，跑通一次就自动恢复。
+
+派生效果：DSH 每次换版只会让检查重跑一次（`host-updated`），跑通即消警，不会像以前那样一直红着。
 
 ---
 
@@ -280,6 +300,13 @@ DSH 起不来时，双击它即可把 `app.asar.rsa-backup` 复制回 `app.asar`
 - **修法**：改成浅色 / 深色**左右并排**，每张最多 380 宽（≈210 高），高度直接减半，还能同时对照两套主题；标题栏按钮改为「并排 / 仅浅色 / 仅深色」三态循环，单看时恢复全宽大图。缩放仍由每张自己的 `ResizeObserver` 驱动，互不影响。
 - **教训**：预览是辅助，别让它比主内容还占地方。
 
+### 14. 提示"不兼容"，其实只是 3 个填充字节（1.0.1）
+
+- **症状**：DSH 0.2.2-rc.5 上插件报「不兼容：请勿部署」，部署被拦；`roundtrip` 显示 `re-packed archive differs (209083008 B -> 209083008 B)` —— 尺寸一模一样。
+- **根因**：`repackAsar()` 把头部填充固定写成 `Buffer.alloc(padLen, 0x20)`，而真机归档那 3 个字节是 `00 00 00`。旧实现拿整文件 SHA256 比对，于是"同样大小、不同字节"被判成写入器与宿主不对齐；其实 Electron 只按 `head[12]` 解析 JSON，填充区从不读取。
+- **修法**：`readAsar()` 记住宿主的填充字节、重打包原样写回；`roundtrip` 改为分区比对，填充差异只提示；测试 fixture 支持 `buildAsar(files, { paddingByte })`，补了 NUL / 空格两种填充的用例（旧 fixture 只覆盖空格，永远测不出这个 bug）。
+- **教训**：**"逐字节相等"不等于"功能相等"**。要证明写入安全，比对必须落在"宿主真正读的区域"上；把无关字节也当成契约，就会把安全的包判成坏的。
+
 ### 排查小贴士（环境类）
 
 - **`node --test` 在受限沙箱里 `spawn EPERM`**：改用逐个文件直跑 `node test/asar.test.mjs` 等。
@@ -293,6 +320,7 @@ DSH 起不来时，双击它即可把 `app.asar.rsa-backup` 复制回 `app.asar`
 
 | 版本 | 要点 |
 | --- | --- |
+| 1.0.1 | 修「宿主填充字节不同 → 误判不兼容」：填充字节按宿主读写、`roundtrip` 改分区比对；版本清单降级为标签，本机验证通过即记入 `verifiedHosts`，DSH 换版不必等插件发版 |
 | 1.0.0 | 预览改浅色/深色并排 + 三态切换（省一半纵向空间）；README 重写，踩坑全量归档；版本号进入 1.x |
 | 0.2.7 | 修设置页 `cannot get property "rsaPaths" without inject`（cordis ctx 是 Proxy）；测试改用 `strictCtx()` |
 | 0.2.6 | 顶部红字提醒（首次安装 / 宿主升级 / 上次失败）+ 自动检查；部署前二次确认并写明回滚路径；服务端要求 `confirmed: true` 且写盘前再查一次；修「恢复默认」ReferenceError |
@@ -349,14 +377,14 @@ node test/compat.test.mjs
 node test/routes.test.mjs
 ```
 
-当前 **48 项**全绿，覆盖：
+当前 **55 项**全绿，覆盖：
 
-- **asar**：在干净归档里追加新文件与缺失目录、替换后的偏移与 integrity、父节点是文件时报错、带 4 字节填充的头部能被正确解析、重打包后字节不变、payload 被移动时 `verifyAsar()` 能查出；
+- **asar**：在干净归档里追加新文件与缺失目录、替换后的偏移与 integrity、父节点是文件时报错、带 4 字节填充的头部能被正确解析、重打包后字节不变、payload 被移动时 `verifyAsar()` 能查出、**宿主的填充字节（NUL / 空格）被读出并原样写回**、`compareArchives()` 能区分"只在填充上不同"与"真差异"；
 - **hook**：幂等、shebang 处理；
 - **deploy**：首次部署、失败清理 pending、非 Windows 拒绝部署；
 - **apply**：**宿主仍持有 `app.asar` 时经复制路径换入成功（`mode: "copy"`）**、启动阶段只校验不换入、损坏 pending 被丢弃且不动 live、跨版本 pending 被丢弃、重复部署不重复插桩、回滚脚本内容与位置；
-- **compat**：7 项检查在正常归档上通过、截断/损坏/入口不可解析时判失败、未测试版本只 `WARN`、检查本身不改归档；`compatStatus` 的五种判定（首次 / 命中 / 升级后失效 / 上次失败 / 找不到归档）；
-- **routes**：未带 `confirmed: true` 的部署一律 400 且不写盘、`/state` 带出 `compat`、全量检查后提醒消失、宿主换版后重新提醒、临时安装不改写随插件发行的回滚脚本、`strictCtx()` 防止再读 ctx 未知属性。
+- **compat**：7 项检查在正常归档上通过、截断/损坏/入口不可解析时判失败、未测试版本只 `WARN`、检查本身不改归档、**两种填充约定下的 `roundtrip` 都通过且报告填充字节**、`verifiedHosts` 让已知版本不再 `WARN`；`compatStatus` 的五种判定（首次 / 命中 / 升级后失效 / 上次失败 / 找不到归档）；
+- **routes**：未带 `confirmed: true` 的部署一律 400 且不写盘、`/state` 带出 `compat`、全量检查后提醒消失、**未知宿主版本通过全量检查后被记入 `verifiedHosts` 并停止告警**、宿主换版后重新提醒、临时安装不改写随插件发行的回滚脚本、`strictCtx()` 防止再读 ctx 未知属性。
 
 ---
 
@@ -380,6 +408,7 @@ npm publish          # 需要 npm 登录与 2FA OTP
 - 插件只改 `app.asar`，不碰官方 exe，不会触发 SmartScreen。
 - 设置页的实时预览通过 `POST /rsa/preview` 生成，iframe 以 `srcdoc` 渲染；并排模式下是两次请求（同一份配置、两套主题），服务端是纯字符串渲染，成本可忽略。
 - DSH 升级会覆盖 `app.asar`，届时重新部署一次即可（插桩会自动补回）。
+- `roundtrip` 只对"宿主真正读的区域"（头部 JSON + payload）做强判据；头部填充字节按宿主学习，差异仅提示，不算失败。
 
 ---
 

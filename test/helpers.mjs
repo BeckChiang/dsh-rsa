@@ -15,8 +15,13 @@ function integrity(buf) {
   return { algorithm: "SHA256", hash, blocks: [hash] };
 }
 
-/** Build an asar archive in memory from { "path/in/archive": string | Buffer }. */
-export function buildAsar(files) {
+/**
+ * Build an asar archive in memory from { "path/in/archive": string | Buffer }.
+ * `paddingByte` mirrors what the packer fills the header's dead bytes with:
+ * electron-builder uses NUL, older asar tooling used a space. The real host
+ * archive is NUL-padded, which is the default here.
+ */
+export function buildAsar(files, { paddingByte = 0x00 } = {}) {
   const tree = { files: {} };
   const chunks = [];
   let offset = 0;
@@ -40,7 +45,7 @@ export function buildAsar(files) {
   // boundary, head[4] carries padded+8, head[12] keeps the RAW JSON length.
   const raw = Buffer.from(JSON.stringify(tree), "utf8");
   const padLen = (4 - (raw.length % 4)) % 4;
-  const jsonBuf = padLen ? Buffer.concat([raw, Buffer.alloc(padLen, 0x20)]) : raw;
+  const jsonBuf = padLen ? Buffer.concat([raw, Buffer.alloc(padLen, paddingByte)]) : raw;
   const head = Buffer.alloc(HEADER_SIZE);
   head.writeUInt32LE(4, 0);
   head.writeUInt32LE(jsonBuf.length + 8, 4);
@@ -64,12 +69,12 @@ export function hostFiles(overrides = {}) {
  * Create a throw-away installation: `<tmp>/resources/app.asar` plus a data dir
  * the deploy can write its state into.
  */
-export function makeFixture(files = hostFiles()) {
+export function makeFixture(files = hostFiles(), options = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "dsh-rsa-test-"));
   const resources = path.join(root, "resources");
   fs.mkdirSync(resources, { recursive: true });
   const asar = path.join(resources, "app.asar");
-  fs.writeFileSync(asar, buildAsar(files));
+  fs.writeFileSync(asar, buildAsar(files, options));
   return {
     root,
     resources,
@@ -82,6 +87,22 @@ export function makeFixture(files = hostFiles()) {
       fs.rmSync(root, { recursive: true, force: true });
     },
   };
+}
+
+/**
+ * A host fixture whose header is guaranteed to carry padding bytes, the way the
+ * real electron-builder archive does (0.2.2-rc.5 has 3). buildAsar only pads
+ * when the JSON length lands off a 4-byte boundary, so grow a filler file until
+ * it does.
+ */
+export function makePaddedFixture(paddingByte = 0x00) {
+  const base = hostFiles();
+  for (let n = 0; n < 32; n += 1) {
+    const files = { ...base, "pad/filler.txt": "x".repeat(n) };
+    const jsonLen = buildAsar(files, { paddingByte }).readUInt32LE(12);
+    if (jsonLen % 4 !== 0) return makeFixture(files, { paddingByte });
+  }
+  throw new Error("could not build a padded header fixture");
 }
 
 /** Read one file out of an asar on disk, closing the archive afterwards. */

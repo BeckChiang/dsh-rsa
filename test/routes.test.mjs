@@ -9,7 +9,7 @@ import path from "node:path";
 import { Readable } from "node:stream";
 import test, { after } from "node:test";
 import { handle, setPathOverrides } from "../index.js";
-import { makeFixture } from "./helpers.mjs";
+import { makeFixture, makePaddedFixture } from "./helpers.mjs";
 
 after(() => setPathOverrides({}));
 
@@ -127,6 +127,33 @@ test("a full check is recorded and clears the banner", async () => {
     assert.equal(again.json.compat.needed, false);
     assert.equal(again.json.compat.last.hostVersion, "9.9.9");
     assert.equal(again.json.compat.last.ok, true);
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+// Self-healing: a host build we have never seen passes every probe, so its
+// version must stop warning after that one check — otherwise every DSH update
+// would need a plugin release just to clear the banner.
+test("a passing check on an unknown host build is remembered", async () => {
+  const fixture = makePaddedFixture(0x00);
+  try {
+    const ctx = ctxFor(fixture);
+    const first = await call(ctx, "GET", "/rsa/compat");
+    assert.equal(first.status, 200);
+    const versionRow = first.json.report.checks.find((c) => c.id === "version");
+    assert.ok(versionRow, "version check must run");
+    assert.equal(versionRow.warn, true, "the first check still flags 9.9.9 as untested");
+
+    const state = JSON.parse(fs.readFileSync(path.join(fixture.dataDir, "state.json"), "utf8"));
+    assert.deepEqual(state.verifiedHosts.map((entry) => entry.version), ["9.9.9"], "the passing build must be recorded");
+    assert.equal(state.lastCompatPadding, "00");
+
+    const second = await call(ctx, "GET", "/rsa/compat?full=0");
+    const remembered = second.json.report.checks.find((c) => c.id === "version");
+    assert.equal(remembered.warn, false, "a remembered build must not warn again");
+    assert.match(remembered.detail, /verified locally/);
+    assert.equal(second.json.compat.needed, false);
   } finally {
     fixture.cleanup();
   }
